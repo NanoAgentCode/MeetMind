@@ -1,6 +1,6 @@
 import asyncio
 
-from app import services
+from backend.app import services
 
 
 class Response:

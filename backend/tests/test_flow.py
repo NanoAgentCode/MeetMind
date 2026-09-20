@@ -3,10 +3,10 @@ from io import BytesIO
 from docx import Document
 from fastapi.testclient import TestClient
 
-from app.config import settings
-from app.main import app
-from app.store import MeetingStore
-import app.main as main_module
+from backend.app.config import settings
+from backend.app.main import app
+from backend.app.store import MeetingStore
+import backend.app.main as main_module
 
 
 class MemoryObjectStorage:

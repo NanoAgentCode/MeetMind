@@ -1,0 +1,22 @@
+[project]
+name = "meetmind"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "boto3>=1.35",
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "langchain-anthropic>=0.3",
+    "langchain-ollama>=0.2",
+    "langchain-openai>=0.3",
+    "langgraph>=0.2",
+    "pydantic-settings>=2.7",
+    "pytest>=8.3",
+    "python-docx>=1.1",
+    "python-multipart>=0.0.20",
+    "uvicorn[standard]>=0.34",
+]
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true

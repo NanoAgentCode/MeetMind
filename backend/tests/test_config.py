@@ -1,4 +1,4 @@
-from app.config import Settings
+from backend.app.config import Settings
 
 
 def test_settings_are_grouped_and_keep_existing_environment_names(monkeypatch):

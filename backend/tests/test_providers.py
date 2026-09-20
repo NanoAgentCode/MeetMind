@@ -1,6 +1,6 @@
 import pytest
 
-from app.config import (
+from backend.app.config import (
     ASRSettings,
     AnthropicSettings,
     AppSettings,
@@ -11,7 +11,7 @@ from app.config import (
     Settings,
     VLLMSettings,
 )
-from app.providers import build_chat_model
+from backend.app.providers import build_chat_model
 
 
 def config(**overrides):

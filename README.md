@@ -29,16 +29,24 @@ docker compose up -d rustfs
 
 ### 2. 后端
 
-建议使用 Python 3.11—3.13：
+项目使用 uv 管理 Python 环境和依赖。在项目根目录执行：
 
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt
+uv sync
 Copy-Item backend\.env.example backend\.env
-cd backend
-uvicorn app.main:app --reload
+uv run uvicorn backend.app.main:app --reload
 ```
+
+不要直接运行 `python backend/app/main.py`；该文件使用包内相对导入，必须通过 `backend.app.main` 模块路径启动。
+
+如果复制项目后出现 `VIRTUAL_ENV ... does not match`，请重启终端，或在 PowerShell 中执行：
+
+```powershell
+Remove-Item Env:VIRTUAL_ENV -ErrorAction SilentlyContinue
+uv sync
+```
+
+IDE 的 Python 解释器应指向当前项目的 `.venv\Scripts\python.exe`，不要继续使用旧目录中的虚拟环境。
 
 默认 `ASR_BACKEND=demo`，可无需密钥走通全部功能，但转写内容是用于产品演示的固定示例。
 
@@ -97,7 +105,7 @@ npm run dev
 ## 测试与构建
 
 ```powershell
-.\.venv\Scripts\python -m pytest backend -q
+uv run python -m pytest backend -q
 
 cd frontend
 npm run build
