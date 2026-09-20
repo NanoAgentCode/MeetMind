@@ -7,7 +7,8 @@
 ## 技术栈
 
 - 前端：React + TypeScript + Vite + Ant Design
-- 后端：FastAPI + LangGraph + LangChain OpenAI
+- 后端：FastAPI + LangGraph + LangChain
+- 模型协议：OpenAI、Claude、Ollama、vLLM
 - 导出：python-docx
 - 文件存储：RustFS（S3 兼容对象存储）
 
@@ -46,10 +47,40 @@ ASR_BACKEND=openai
 OPENAI_API_KEY=你的密钥
 OPENAI_BASE_URL=https://api.openai.com/v1
 ASR_MODEL=whisper-1
-LLM_MODEL=gpt-4o-mini
 ```
 
-`OPENAI_BASE_URL` 可替换为实现兼容接口的模型服务地址。配置密钥后，纪要也会使用大模型结构化生成；未配置密钥时，LangGraph 会运行确定性提取流程。
+`OPENAI_BASE_URL` 可替换为实现兼容接口的语音转写服务地址。
+
+### 选择纪要模型协议
+
+默认 `LLM_PROVIDER=demo`，LangGraph 运行无需模型服务的确定性提取流程。接入模型时选择下面一种配置：
+
+```dotenv
+# OpenAI
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+OPENAI_API_KEY=你的密钥
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# Claude（Anthropic 原生协议）
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-sonnet-4-5
+ANTHROPIC_API_KEY=你的密钥
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+
+# Ollama
+LLM_PROVIDER=ollama
+LLM_MODEL=qwen3:8b
+OLLAMA_BASE_URL=http://localhost:11434
+
+# vLLM（OpenAI-compatible 协议）
+LLM_PROVIDER=vllm
+LLM_MODEL=Qwen/Qwen3-8B
+VLLM_BASE_URL=http://localhost:8000/v1
+VLLM_API_KEY=EMPTY
+```
+
+模型名称仅为配置示例，请替换为服务中实际可用的模型。四种协议统一输出并校验 `title`、`summary`、`key_points`、`decisions` 和 `action_items` 字段。
 
 ### 3. 前端
 
@@ -75,3 +106,4 @@ npm run build
 - 录音、会议元数据和导出文件均存储在 RustFS 的 `huizhi-meetings` 桶中。
 - 当前为会后上传处理，不采集实时麦克风音频。
 - 使用 `demo` 后端不会识别真实音频；正式演示前需配置真实 ASR 服务。
+- `LLM_PROVIDER` 控制纪要模型；`ASR_BACKEND` 独立控制语音转写，两者不要混用。

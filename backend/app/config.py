@@ -10,7 +10,13 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     asr_model: str = "whisper-1"
+    llm_provider: str = "demo"
     llm_model: str = "gpt-4o-mini"
+    anthropic_api_key: str = ""
+    anthropic_base_url: str = "https://api.anthropic.com"
+    ollama_base_url: str = "http://localhost:11434"
+    vllm_base_url: str = "http://localhost:8000/v1"
+    vllm_api_key: str = "EMPTY"
     max_upload_mb: int = 200
     rustfs_endpoint: str = "http://localhost:9000"
     rustfs_access_key: str = "huizhi-local-access"

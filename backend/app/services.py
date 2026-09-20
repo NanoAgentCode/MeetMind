@@ -1,4 +1,5 @@
 import re
+import json
 from pathlib import Path
 from typing import TypedDict
 
@@ -7,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .config import settings
 from .models import Minutes
+from .providers import build_chat_model
 
 
 class WorkflowState(TypedDict, total=False):
@@ -61,21 +63,22 @@ def _fallback_minutes(title: str, transcript: str) -> Minutes:
 
 
 async def generate_node(state: WorkflowState) -> WorkflowState:
-    if settings.openai_api_key:
-        from langchain_openai import ChatOpenAI
-
-        model = ChatOpenAI(
-            model=settings.llm_model,
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_base_url,
-            temperature=0,
-        ).with_structured_output(Minutes)
-        result = await model.ainvoke(
+    model = build_chat_model()
+    if model is None:
+        result = _fallback_minutes(state["title"], state["transcript"])
+    else:
+        response = await model.ainvoke(
             "你是一名严谨的中文会议秘书。基于转写生成纪要，不得编造；行动项尽量包含负责人和时间。\n"
+            "只返回 JSON，不要使用 Markdown 代码块。JSON 必须包含以下字段："
+            "title 字符串、summary 字符串、key_points 字符串数组、decisions 字符串数组、"
+            "action_items 字符串数组。\n"
             f"会议名称：{state['title']}\n转写：\n{state['transcript']}"
         )
-    else:
-        result = _fallback_minutes(state["title"], state["transcript"])
+        content = response.content
+        if not isinstance(content, str):
+            raise ValueError("模型未返回文本格式的 JSON")
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip(), flags=re.IGNORECASE)
+        result = Minutes.model_validate(json.loads(cleaned))
     return {"minutes": result.model_dump()}
 
 
@@ -89,4 +92,3 @@ minutes_graph = builder.compile()
 async def create_minutes(title: str, transcript: str) -> Minutes:
     result = await minutes_graph.ainvoke({"title": title, "transcript": transcript})
     return Minutes.model_validate(result["minutes"])
-

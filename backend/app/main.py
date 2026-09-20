@@ -35,7 +35,12 @@ def require_meeting(meeting_id: str) -> Meeting:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "asr_backend": settings.asr_backend}
+    return {
+        "status": "ok",
+        "asr_backend": settings.asr_backend,
+        "llm_provider": settings.llm_provider,
+        "llm_model": settings.llm_model,
+    }
 
 
 @app.post("/api/meetings", response_model=Meeting, status_code=201)
