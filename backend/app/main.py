@@ -68,9 +68,20 @@ async def upload_meeting(file: UploadFile = File(...), title: str = Form(...)):
     return store.save(meeting)
 
 
+@app.get("/api/meetings", response_model=list[Meeting])
+def list_meetings():
+    return store.list()
+
+
 @app.get("/api/meetings/{meeting_id}", response_model=Meeting)
 def get_meeting(meeting_id: str):
     return require_meeting(meeting_id)
+
+
+@app.delete("/api/meetings/{meeting_id}", status_code=204)
+def delete_meeting(meeting_id: str):
+    meeting = require_meeting(meeting_id)
+    store.delete(meeting)
 
 
 @app.post("/api/meetings/{meeting_id}/transcribe", response_model=Meeting)

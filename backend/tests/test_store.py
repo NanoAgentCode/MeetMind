@@ -16,6 +16,9 @@ class FakeS3Client:
         self.head_error = head_error
         self.head_calls = 0
         self.created_buckets = []
+        self.list_responses = []
+        self.list_requests = []
+        self.deleted_keys = []
 
     def head_bucket(self, **kwargs):
         self.head_calls += 1
@@ -24,6 +27,13 @@ class FakeS3Client:
 
     def create_bucket(self, **kwargs):
         self.created_buckets.append(kwargs["Bucket"])
+
+    def list_objects_v2(self, **kwargs):
+        self.list_requests.append(kwargs)
+        return self.list_responses.pop(0)
+
+    def delete_object(self, **kwargs):
+        self.deleted_keys.append(kwargs["Key"])
 
 
 def storage_with(client: FakeS3Client) -> RustFSStorage:
@@ -67,3 +77,30 @@ def test_ensure_bucket_does_not_hide_permission_errors():
 
     assert client.created_buckets == []
     assert storage._ready is False
+
+
+def test_list_keys_reads_all_pages():
+    client = FakeS3Client()
+    client.list_responses = [
+        {
+            "Contents": [{"Key": "meetings/1.json"}],
+            "IsTruncated": True,
+            "NextContinuationToken": "next-page",
+        },
+        {"Contents": [{"Key": "meetings/2.json"}], "IsTruncated": False},
+    ]
+    storage = storage_with(client)
+
+    keys = storage.list_keys("meetings/")
+
+    assert keys == ["meetings/1.json", "meetings/2.json"]
+    assert client.list_requests[1]["ContinuationToken"] == "next-page"
+
+
+def test_delete_removes_object():
+    client = FakeS3Client()
+    storage = storage_with(client)
+
+    storage.delete("meetings/1.json")
+
+    assert client.deleted_keys == ["meetings/1.json"]

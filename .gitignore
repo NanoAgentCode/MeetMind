@@ -7,6 +7,7 @@ __pycache__/
 .pytest_cache/
 .env
 rustfs-data/
+backend/data/*.db
 *.pyc
 *.tsbuildinfo
 vite.config.js

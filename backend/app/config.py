@@ -58,6 +58,11 @@ class RustFSSettings(BaseSettings):
     region: str = "us-east-1"
 
 
+class DatabaseSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_prefix="DATABASE_", extra="ignore")
+    path: Path = Path(__file__).parents[1] / "data" / "meetmind.db"
+
+
 class Settings(BaseModel):
     app: AppSettings = Field(default_factory=AppSettings)
     asr: ASRSettings = Field(default_factory=ASRSettings)
@@ -67,6 +72,7 @@ class Settings(BaseModel):
     ollama: OllamaSettings = Field(default_factory=OllamaSettings)
     vllm: VLLMSettings = Field(default_factory=VLLMSettings)
     rustfs: RustFSSettings = Field(default_factory=RustFSSettings)
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
 
 
 settings = Settings()

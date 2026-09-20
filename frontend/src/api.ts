@@ -26,7 +26,14 @@ export async function getMeeting(id: string) {
   return (await api.get<Meeting>(`/meetings/${id}`)).data
 }
 
+export async function listMeetings() {
+  return (await api.get<Meeting[]>('/meetings')).data
+}
+
+export async function deleteMeeting(id: string) {
+  await api.delete(`/meetings/${id}`)
+}
+
 export function exportUrl(id: string, format: 'docx' | 'md') {
   return `/api/meetings/${id}/export?format=${format}`
 }
-

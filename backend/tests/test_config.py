@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from backend.app.config import Settings
 
 
@@ -12,6 +14,7 @@ def test_settings_are_grouped_and_keep_existing_environment_names(monkeypatch):
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama:11434")
     monkeypatch.setenv("RUSTFS_ENDPOINT", "http://rustfs:9000")
     monkeypatch.setenv("RUSTFS_BUCKET", "meeting-files")
+    monkeypatch.setenv("DATABASE_PATH", "work/test-meetings.db")
 
     config = Settings()
 
@@ -25,3 +28,4 @@ def test_settings_are_grouped_and_keep_existing_environment_names(monkeypatch):
     assert config.ollama.base_url == "http://ollama:11434"
     assert config.rustfs.endpoint == "http://rustfs:9000"
     assert config.rustfs.bucket == "meeting-files"
+    assert config.database.path == Path("work/test-meetings.db")

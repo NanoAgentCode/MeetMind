@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from pathlib import Path
 from typing import Protocol
 
@@ -13,6 +14,8 @@ from .models import Meeting
 class ObjectStorage(Protocol):
     def put(self, key: str, data: bytes, content_type: str = "application/octet-stream") -> None: ...
     def get(self, key: str) -> bytes: ...
+    def list_keys(self, prefix: str) -> list[str]: ...
+    def delete(self, key: str) -> None: ...
 
 
 class RustFSStorage:
@@ -51,30 +54,119 @@ class RustFSStorage:
         response = self.client.get_object(Bucket=self.bucket, Key=key)
         return response["Body"].read()
 
+    def list_keys(self, prefix: str) -> list[str]:
+        self._ensure_bucket()
+        keys: list[str] = []
+        continuation_token: str | None = None
+        while True:
+            request = {"Bucket": self.bucket, "Prefix": prefix}
+            if continuation_token:
+                request["ContinuationToken"] = continuation_token
+            response = self.client.list_objects_v2(**request)
+            keys.extend(item["Key"] for item in response.get("Contents", []))
+            if not response.get("IsTruncated"):
+                return keys
+            continuation_token = response.get("NextContinuationToken")
+
+    def delete(self, key: str) -> None:
+        self._ensure_bucket()
+        self.client.delete_object(Bucket=self.bucket, Key=key)
+
 
 class MeetingStore:
-    def __init__(self, storage: ObjectStorage | None = None):
+    def __init__(self, storage: ObjectStorage | None = None, database_path: Path | str | None = None):
         self.storage = storage or RustFSStorage()
+        self.database_path = Path(database_path or settings.database.path)
+        self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self._initialize_database()
 
-    @staticmethod
-    def meeting_key(meeting_id: str) -> str:
-        return f"meetings/{meeting_id}.json"
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.database_path)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    def _initialize_database(self) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS meetings (
+                    id TEXT PRIMARY KEY,
+                    filename TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    transcript TEXT NOT NULL DEFAULT '',
+                    minutes_json TEXT
+                )
+                """
+            )
 
     @staticmethod
     def audio_key(meeting: Meeting) -> str:
         return f"recordings/{meeting.id}/source{Path(meeting.filename).suffix.lower()}"
 
     def save(self, meeting: Meeting) -> Meeting:
-        payload = meeting.model_dump_json(indent=2).encode("utf-8")
-        self.storage.put(self.meeting_key(meeting.id), payload, "application/json")
+        minutes_json = meeting.minutes.model_dump_json() if meeting.minutes else None
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO meetings (id, filename, title, created_at, status, transcript, minutes_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    filename = excluded.filename,
+                    title = excluded.title,
+                    created_at = excluded.created_at,
+                    status = excluded.status,
+                    transcript = excluded.transcript,
+                    minutes_json = excluded.minutes_json
+                """,
+                (
+                    meeting.id,
+                    meeting.filename,
+                    meeting.title,
+                    meeting.created_at.isoformat(),
+                    meeting.status,
+                    meeting.transcript,
+                    minutes_json,
+                ),
+            )
         return meeting
 
     def get(self, meeting_id: str) -> Meeting | None:
-        try:
-            payload = self.storage.get(self.meeting_key(meeting_id))
-        except (ClientError, KeyError):
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM meetings WHERE id = ?", (meeting_id,)).fetchone()
+        if row is None:
             return None
-        return Meeting.model_validate(json.loads(payload.decode("utf-8")))
+        return self._meeting_from_row(row)
+
+    def list(self) -> list[Meeting]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT * FROM meetings ORDER BY created_at DESC").fetchall()
+        return [self._meeting_from_row(row) for row in rows]
+
+    @staticmethod
+    def _meeting_from_row(row: sqlite3.Row) -> Meeting:
+        return Meeting.model_validate(
+            {
+                "id": row["id"],
+                "filename": row["filename"],
+                "title": row["title"],
+                "created_at": row["created_at"],
+                "status": row["status"],
+                "transcript": row["transcript"],
+                "minutes": json.loads(row["minutes_json"]) if row["minutes_json"] else None,
+            }
+        )
+
+    def delete(self, meeting: Meeting) -> None:
+        related_keys = [
+            *self.storage.list_keys(f"recordings/{meeting.id}/"),
+            *self.storage.list_keys(f"exports/{meeting.id}/"),
+        ]
+        for key in dict.fromkeys(related_keys):
+            self.storage.delete(key)
+        with self._connect() as connection:
+            connection.execute("DELETE FROM meetings WHERE id = ?", (meeting.id,))
 
     def save_audio(self, meeting: Meeting, content: bytes, content_type: str) -> None:
         self.storage.put(self.audio_key(meeting), content, content_type)

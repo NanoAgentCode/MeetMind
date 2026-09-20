@@ -10,10 +10,12 @@
 - 后端：FastAPI + LangGraph + LangChain
 - 模型协议：OpenAI、Claude、Ollama、vLLM
 - 导出：python-docx
-- 文件存储：RustFS（S3 兼容对象存储）
+- 结构化数据：SQLite
+- 文件存储：RustFS（S3 兼容对象存储，仅保存录音和导出文件）
 
-后端配置在 `backend/app/config.py` 中按 `app`、`asr`、`llm`、各模型 Provider 和 `rustfs` 分组；环境变量名称保持扁平格式，兼容 `.env` 与容器部署。
+后端配置在 `backend/app/config.py` 中按 `app`、`asr`、`llm`、各模型 Provider、`database` 和 `rustfs` 分组；环境变量名称保持扁平格式，兼容 `.env` 与容器部署。
 RustFS 存储桶不存在时，后端会在首次读写对象前自动创建；权限错误等非“不存在”异常不会被忽略。
+会议标题、处理状态、转写内容和结构化纪要存储在 SQLite，默认文件为 `backend/data/meetmind.db`。会议记录页面支持查看、搜索、状态筛选、继续处理和删除。
 
 ## 快速启动
 
@@ -114,7 +116,7 @@ npm run build
 
 ## 第一阶段约束
 
-- 录音、会议元数据和导出文件均存储在 RustFS 的 `huizhi-meetings` 桶中。
+- 会议元数据、转写和纪要存储在 SQLite；录音与导出文件存储在 RustFS 的 `huizhi-meetings` 桶中。
 - 当前为会后上传处理，不采集实时麦克风音频。
 - 使用 `demo` 后端不会识别真实音频；正式演示前需配置真实 ASR 服务。
 - `LLM_PROVIDER` 控制纪要模型；`ASR_BACKEND` 独立控制语音转写，两者不要混用。
