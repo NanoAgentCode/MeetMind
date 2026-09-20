@@ -87,14 +87,18 @@ def delete_meeting(meeting_id: str):
 @app.post("/api/meetings/{meeting_id}/transcribe", response_model=Meeting)
 async def transcribe(meeting_id: str):
     meeting = require_meeting(meeting_id)
+    temporary_path: Path | None = None
     try:
         audio = store.get_audio(meeting)
-        with NamedTemporaryFile(suffix=Path(meeting.filename).suffix) as temporary:
+        with NamedTemporaryFile(suffix=Path(meeting.filename).suffix, delete=False) as temporary:
             temporary.write(audio)
-            temporary.flush()
-            meeting.transcript = await transcribe_audio(Path(temporary.name))
+            temporary_path = Path(temporary.name)
+        meeting.transcript = await transcribe_audio(temporary_path)
     except (ValueError, httpx.HTTPError) as exc:
         raise HTTPException(502, f"转写服务失败：{exc}") from exc
+    finally:
+        if temporary_path:
+            temporary_path.unlink(missing_ok=True)
     meeting.status = "transcribed"
     return store.save(meeting)
 

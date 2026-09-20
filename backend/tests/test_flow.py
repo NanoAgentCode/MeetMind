@@ -128,3 +128,28 @@ def test_delete_missing_meeting_returns_not_found(monkeypatch, tmp_path):
     response = TestClient(app).delete("/api/meetings/missing")
 
     assert response.status_code == 404
+
+
+def test_transcribe_closes_temporary_file_before_asr_reads_it(monkeypatch, tmp_path):
+    object_storage = MemoryObjectStorage()
+    monkeypatch.setattr(main_module, "store", MeetingStore(object_storage, tmp_path / "meetings.db"))
+    temporary_paths = []
+
+    async def readable_transcriber(path):
+        temporary_paths.append(path)
+        assert path.read_bytes() == b"audio-content"
+        return "测试转写内容"
+
+    monkeypatch.setattr(main_module, "transcribe_audio", readable_transcriber)
+    client = TestClient(app)
+    created = client.post(
+        "/api/meetings",
+        data={"title": "临时文件测试"},
+        files={"file": ("windows.mp3", b"audio-content", "audio/mpeg")},
+    ).json()
+
+    response = client.post(f"/api/meetings/{created['id']}/transcribe")
+
+    assert response.status_code == 200
+    assert response.json()["transcript"] == "测试转写内容"
+    assert temporary_paths and not temporary_paths[0].exists()
