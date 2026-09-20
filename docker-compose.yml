@@ -1,0 +1,24 @@
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: huizhi-rustfs
+    command: /data
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-huizhi-local-access}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-huizhi-local-secret-change-before-production}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  rustfs-data:

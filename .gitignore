@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.venv/
+.codegraph/
+work/
+__pycache__/
+.pytest_cache/
+.env
+rustfs-data/
+*.pyc
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
