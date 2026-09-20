@@ -18,7 +18,7 @@ class WorkflowState(TypedDict, total=False):
 
 
 async def transcribe_audio(path: Path) -> str:
-    if settings.asr_backend == "demo":
+    if settings.asr.backend == "demo":
         return (
             "主持人：本次会议主要讨论产品第一阶段上线计划。\n"
             "张明：上传录音和语音转写功能已经进入联调，本周五前完成异常场景测试。\n"
@@ -26,18 +26,18 @@ async def transcribe_audio(path: Path) -> str:
             "主持人：决定第一阶段先交付上传、转写、生成、修改和导出闭环。\n"
             "王芳：我负责整理验收清单，下周一组织演示。"
         )
-    if settings.asr_backend != "openai":
-        raise ValueError(f"不支持的 ASR_BACKEND：{settings.asr_backend}")
-    if not settings.openai_api_key:
+    if settings.asr.backend != "openai":
+        raise ValueError(f"不支持的 ASR_BACKEND：{settings.asr.backend}")
+    if not settings.openai.api_key:
         raise ValueError("使用 openai 转写前请配置 OPENAI_API_KEY")
 
-    headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+    headers = {"Authorization": f"Bearer {settings.openai.api_key}"}
     async with httpx.AsyncClient(timeout=180) as client:
         with path.open("rb") as stream:
             response = await client.post(
-                f"{settings.openai_base_url.rstrip('/')}/audio/transcriptions",
+                f"{settings.openai.base_url.rstrip('/')}/audio/transcriptions",
                 headers=headers,
-                data={"model": settings.asr_model, "response_format": "json"},
+                data={"model": settings.asr.model, "response_format": "json"},
                 files={"file": (path.name, stream, "application/octet-stream")},
             )
     response.raise_for_status()

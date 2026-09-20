@@ -12,6 +12,8 @@
 - 导出：python-docx
 - 文件存储：RustFS（S3 兼容对象存储）
 
+后端配置在 `backend/app/config.py` 中按 `app`、`asr`、`llm`、各模型 Provider 和 `rustfs` 分组；环境变量名称保持扁平格式，兼容 `.env` 与容器部署。
+
 ## 快速启动
 
 ### 1. 启动 RustFS

@@ -19,13 +19,13 @@ class RustFSStorage:
     """RustFS adapter using its S3-compatible API and path-style addressing."""
 
     def __init__(self):
-        self.bucket = settings.rustfs_bucket
+        self.bucket = settings.rustfs.bucket
         self.client = boto3.client(
             "s3",
-            endpoint_url=settings.rustfs_endpoint,
-            aws_access_key_id=settings.rustfs_access_key,
-            aws_secret_access_key=settings.rustfs_secret_key,
-            region_name=settings.rustfs_region,
+            endpoint_url=settings.rustfs.endpoint,
+            aws_access_key_id=settings.rustfs.access_key,
+            aws_secret_access_key=settings.rustfs.secret_key,
+            region_name=settings.rustfs.region,
             config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
         )
         self._ready = False

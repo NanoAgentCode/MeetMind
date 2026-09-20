@@ -26,7 +26,7 @@ def test_complete_meeting_flow(monkeypatch):
     object_storage = MemoryObjectStorage()
     test_store = MeetingStore(object_storage)
     monkeypatch.setattr(main_module, "store", test_store)
-    monkeypatch.setattr(settings, "asr_backend", "demo")
+    monkeypatch.setattr(settings.asr, "backend", "demo")
     client = TestClient(app)
 
     uploaded = client.post(

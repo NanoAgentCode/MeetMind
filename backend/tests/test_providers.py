@@ -1,17 +1,37 @@
 import pytest
 
-from app.config import Settings
+from app.config import (
+    ASRSettings,
+    AnthropicSettings,
+    AppSettings,
+    LLMSettings,
+    OllamaSettings,
+    OpenAISettings,
+    RustFSSettings,
+    Settings,
+    VLLMSettings,
+)
 from app.providers import build_chat_model
 
 
 def config(**overrides):
-    values = {
-        "llm_provider": "demo",
-        "llm_model": "test-model",
-        "_env_file": None,
-    }
-    values.update(overrides)
-    return Settings(**values)
+    return Settings(
+        app=AppSettings(_env_file=None),
+        asr=ASRSettings(_env_file=None),
+        llm=LLMSettings(
+            provider=overrides.get("llm_provider", "demo"),
+            model=overrides.get("llm_model", "test-model"),
+            _env_file=None,
+        ),
+        openai=OpenAISettings(api_key=overrides.get("openai_api_key", ""), _env_file=None),
+        anthropic=AnthropicSettings(api_key=overrides.get("anthropic_api_key", ""), _env_file=None),
+        ollama=OllamaSettings(_env_file=None),
+        vllm=VLLMSettings(
+            base_url=overrides.get("vllm_base_url", "http://localhost:8000/v1"),
+            _env_file=None,
+        ),
+        rustfs=RustFSSettings(_env_file=None),
+    )
 
 
 def test_demo_provider_uses_deterministic_fallback():

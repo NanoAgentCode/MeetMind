@@ -37,9 +37,9 @@ def require_meeting(meeting_id: str) -> Meeting:
 def health():
     return {
         "status": "ok",
-        "asr_backend": settings.asr_backend,
-        "llm_provider": settings.llm_provider,
-        "llm_model": settings.llm_model,
+        "asr_backend": settings.asr.backend,
+        "llm_provider": settings.llm.provider,
+        "llm_model": settings.llm.model,
     }
 
 
@@ -48,9 +48,9 @@ async def upload_meeting(file: UploadFile = File(...), title: str = Form(...)):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
         raise HTTPException(400, "仅支持 MP3、WAV、M4A、WEBM、MP4、MPEG 或 OGG 文件")
-    content = await file.read(settings.max_upload_mb * 1024 * 1024 + 1)
-    if len(content) > settings.max_upload_mb * 1024 * 1024:
-        raise HTTPException(413, f"文件不能超过 {settings.max_upload_mb} MB")
+    content = await file.read(settings.app.max_upload_mb * 1024 * 1024 + 1)
+    if len(content) > settings.app.max_upload_mb * 1024 * 1024:
+        raise HTTPException(413, f"文件不能超过 {settings.app.max_upload_mb} MB")
     if not content:
         raise HTTPException(400, "录音文件不能为空")
     meeting_id = uuid4().hex
