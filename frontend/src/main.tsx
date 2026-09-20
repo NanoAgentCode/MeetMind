@@ -11,11 +11,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: '#c56b3c',
-          colorText: '#172925',
-          colorBgContainer: '#fffdf7',
+          colorPrimary: '#155eef',
+          colorText: '#182230',
+          colorBgContainer: '#ffffff',
+          colorBorder: '#d0d5dd',
           borderRadius: 6,
-          fontFamily: '"Noto Serif SC", "Source Han Serif SC", serif',
+          controlHeight: 38,
+          fontFamily: '"Noto Sans SC", "Microsoft YaHei", sans-serif',
         },
       }}
     >
@@ -23,4 +25,3 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ConfigProvider>
   </React.StrictMode>,
 )
-
