@@ -294,8 +294,8 @@ export default function App() {
                 <div className="actions workspace-actions">
                   {meeting.status === 'uploaded' && <Button type="primary" icon={<AudioOutlined />} onClick={() => run('转写', () => transcribeMeeting(meeting.id))} loading={busy === '转写'}>开始转写</Button>}
                   {meeting.status === 'transcribed' && <Button type="primary" icon={<RobotOutlined />} onClick={() => run('生成纪要', () => generateMinutes(meeting.id))} loading={busy === '生成纪要'}>生成纪要</Button>}
-                  {draft && <Button className="save-action" type="primary" icon={<EditOutlined />} onClick={handleSave} loading={busy === '保存定稿'}><span>保存定稿<small>同步当前修改</small></span></Button>}
                   {meeting.status === 'edited' && <div className="export-actions"><span className="export-label">文档导出</span><Button className="export-action word" icon={<FileWordOutlined />} href={exportUrl(meeting.id, 'docx')}><span>Word<small>DOCX</small></span></Button><Button className="export-action markdown" icon={<FileMarkdownOutlined />} href={exportUrl(meeting.id, 'md')}><span>Markdown<small>MD</small></span></Button></div>}
+                  {draft && <Button className="save-action" type="primary" icon={<EditOutlined />} onClick={handleSave} loading={busy === '保存定稿'}><span>保存定稿<small>同步当前修改</small></span></Button>}
                 </div>
               </div>
               <div className="editor-grid">
