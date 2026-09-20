@@ -30,11 +30,11 @@ docker compose up -d rustfs
 建议使用 Python 3.11—3.13：
 
 ```powershell
-cd backend
-python -m venv .venv
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
+pip install -r backend\requirements.txt
+Copy-Item backend\.env.example backend\.env
+cd backend
 uvicorn app.main:app --reload
 ```
 
@@ -85,6 +85,7 @@ VLLM_API_KEY=EMPTY
 ### 3. 前端
 
 ```powershell
+cd frontend
 npm install
 npm run dev
 ```
@@ -94,10 +95,9 @@ npm run dev
 ## 测试与构建
 
 ```powershell
-cd backend
-pytest
+.\.venv\Scripts\python -m pytest backend -q
 
-cd ..
+cd frontend
 npm run build
 ```
 
