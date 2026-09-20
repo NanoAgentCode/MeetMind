@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   AppstoreOutlined, AudioOutlined, BellOutlined, CheckCircleFilled, CloudServerOutlined,
-  DeleteOutlined, DownloadOutlined, EditOutlined, FileTextOutlined, FolderOpenOutlined, LoadingOutlined,
+  DeleteOutlined, EditOutlined, FileMarkdownOutlined, FileTextOutlined, FileWordOutlined, FolderOpenOutlined, LoadingOutlined,
   MenuFoldOutlined, MoreOutlined, PlusOutlined, RobotOutlined, SafetyCertificateOutlined,
   SearchOutlined, SettingOutlined, TeamOutlined, UploadOutlined,
 } from '@ant-design/icons'
@@ -291,11 +291,11 @@ export default function App() {
             <section className="workspace">
               <div className="workspace-toolbar">
                 <div><strong>内容处理区</strong><span>请按任务进度完成处理与确认</span></div>
-                <div className="actions">
+                <div className="actions workspace-actions">
                   {meeting.status === 'uploaded' && <Button type="primary" icon={<AudioOutlined />} onClick={() => run('转写', () => transcribeMeeting(meeting.id))} loading={busy === '转写'}>开始转写</Button>}
                   {meeting.status === 'transcribed' && <Button type="primary" icon={<RobotOutlined />} onClick={() => run('生成纪要', () => generateMinutes(meeting.id))} loading={busy === '生成纪要'}>生成纪要</Button>}
-                  {draft && <Button type="primary" icon={<EditOutlined />} onClick={handleSave} loading={busy === '保存定稿'}>保存定稿</Button>}
-                  {meeting.status === 'edited' && <><Button icon={<DownloadOutlined />} href={exportUrl(meeting.id, 'docx')}>导出 Word</Button><Button icon={<DownloadOutlined />} href={exportUrl(meeting.id, 'md')}>Markdown</Button></>}
+                  {draft && <Button className="save-action" type="primary" icon={<EditOutlined />} onClick={handleSave} loading={busy === '保存定稿'}><span>保存定稿<small>同步当前修改</small></span></Button>}
+                  {meeting.status === 'edited' && <div className="export-actions"><span className="export-label">文档导出</span><Button className="export-action word" icon={<FileWordOutlined />} href={exportUrl(meeting.id, 'docx')}><span>Word<small>DOCX</small></span></Button><Button className="export-action markdown" icon={<FileMarkdownOutlined />} href={exportUrl(meeting.id, 'md')}><span>Markdown<small>MD</small></span></Button></div>}
                 </div>
               </div>
               <div className="editor-grid">
