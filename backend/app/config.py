@@ -9,7 +9,9 @@ ENV_FILE = Path(__file__).parents[1] / ".env"
 
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
-    max_upload_mb: int = 200
+    host: str = Field(default="127.0.0.1", validation_alias="APP_HOST")
+    port: int = Field(default=8000, validation_alias="APP_PORT")
+    max_upload_mb: int = Field(default=200, validation_alias="MAX_UPLOAD_MB")
 
 
 class ASRSettings(BaseSettings):

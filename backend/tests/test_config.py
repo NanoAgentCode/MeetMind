@@ -3,6 +3,8 @@ from backend.app.config import Settings
 
 def test_settings_are_grouped_and_keep_existing_environment_names(monkeypatch):
     monkeypatch.setenv("MAX_UPLOAD_MB", "512")
+    monkeypatch.setenv("APP_HOST", "0.0.0.0")
+    monkeypatch.setenv("APP_PORT", "9002")
     monkeypatch.setenv("ASR_BACKEND", "openai")
     monkeypatch.setenv("ASR_MODEL", "whisper-large")
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
@@ -14,6 +16,8 @@ def test_settings_are_grouped_and_keep_existing_environment_names(monkeypatch):
     config = Settings()
 
     assert config.app.max_upload_mb == 512
+    assert config.app.host == "0.0.0.0"
+    assert config.app.port == 9002
     assert config.asr.backend == "openai"
     assert config.asr.model == "whisper-large"
     assert config.llm.provider == "ollama"

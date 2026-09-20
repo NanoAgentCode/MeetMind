@@ -34,10 +34,10 @@ docker compose up -d rustfs
 ```powershell
 uv sync
 Copy-Item backend\.env.example backend\.env
-uv run uvicorn backend.app.main:app --reload
+uv run python backend\main.py
 ```
 
-不要直接运行 `python backend/app/main.py`；该文件使用包内相对导入，必须通过 `backend.app.main` 模块路径启动。
+`backend/main.py` 是后端启动入口；`backend/app/main.py` 只负责 FastAPI 应用和路由定义。需要热更新时可使用 `uv run uvicorn backend.app.main:app --reload`。
 
 如果复制项目后出现 `VIRTUAL_ENV ... does not match`，请重启终端，或在 PowerShell 中执行：
 
