@@ -6,20 +6,18 @@ from tempfile import NamedTemporaryFile
 from uuid import uuid4
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, Request, Response as FastAPIResponse, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from .access import (
-    DepartmentInput, LoginInput, RoleInput, UserCreateInput, UserUpdateInput,
-    has_permission, require_permission, required_route_permissions,
-)
-from .auth import ADMIN_ROLE_ID, MEMBER_ROLE_ID, PERMISSIONS, auth_store
+from .access import has_permission, required_route_permissions
+from .access_routes import create_access_router
+from .auth import auth_store
 from .config import settings
 from .exporter import docx_bytes, markdown
 from .model_registry import model_registry
-from .models import ChatRequest, ChatResponse, Meeting, MeetingAnswer, MeetingQuestion, Minutes, ModelConfig, ModelConfigInput, Provider, ProviderInput
-from .provider_catalog import fetch_provider_models
+from .model_routes import create_model_router
+from .models import ChatRequest, ChatResponse, Meeting, MeetingAnswer, MeetingQuestion, Minutes
 from .services import answer_chat, answer_meeting_question, create_minutes, transcribe_audio
 from .store import store
 
@@ -46,6 +44,9 @@ app.add_middleware(
 
 ALLOWED_SUFFIXES = {".mp3", ".wav", ".m4a", ".webm", ".mp4", ".mpeg", ".ogg"}
 
+app.include_router(create_access_router(lambda: auth_store, lambda: store))
+app.include_router(create_model_router(lambda: model_registry, lambda: httpx.AsyncClient))
+
 
 @app.middleware("http")
 async def require_login(request: Request, call_next):
@@ -59,159 +60,6 @@ async def require_login(request: Request, call_next):
     if required and not any(has_permission(user, permission) for permission in required):
         return Response(status_code=403, content='{"detail":"权限不足"}', media_type="application/json")
     return await call_next(request)
-
-
-@app.post("/api/auth/login")
-def login(data: LoginInput, response: FastAPIResponse):
-    auth_store.bootstrap_admin()
-    if not auth_store.has_users():
-        raise HTTPException(503, "请先配置 ADMIN_USERNAME 和 ADMIN_PASSWORD")
-    user = auth_store.authenticate(data.username, data.password)
-    if not user:
-        raise HTTPException(401, "账号或密码错误")
-    token = auth_store.create_session(user["id"])
-    response.set_cookie("meetmind_session", token, max_age=7 * 86400, httponly=True, samesite="lax", secure=settings.app.cookie_secure)
-    return user
-
-
-@app.post("/api/auth/logout", status_code=204)
-def logout(request: Request, response: FastAPIResponse):
-    auth_store.delete_session(request.cookies.get("meetmind_session"))
-    response.delete_cookie("meetmind_session")
-
-
-@app.get("/api/auth/me")
-def current_user(request: Request):
-    return request.state.user
-
-
-@app.get("/api/notifications")
-def list_notifications(request: Request):
-    return store.list_notifications(request.state.user["id"])
-
-
-@app.post("/api/notifications/{notification_id}/read", status_code=204)
-def mark_notification_read(notification_id: str, request: Request):
-    if not store.mark_notification_read(notification_id, request.state.user["id"]):
-        raise HTTPException(404, "通知不存在")
-
-
-def _management_error(exc: Exception):
-    if isinstance(exc, KeyError):
-        raise HTTPException(404, str(exc.args[0])) from exc
-    raise HTTPException(409, str(exc)) from exc
-
-
-def _protect_admin_target(actor: dict, target: dict | None):
-    if target and ADMIN_ROLE_ID in target["role_ids"] and ADMIN_ROLE_ID not in actor["role_ids"]:
-        raise HTTPException(403, "只有系统管理员可以管理管理员账号")
-
-
-def _check_role_assignment(actor: dict, role_ids: list[str]):
-    if not has_permission(actor, "role:manage") and set(role_ids) != {MEMBER_ROLE_ID}:
-        raise HTTPException(403, "分配角色需要角色管理权限")
-    if ADMIN_ROLE_ID in role_ids and ADMIN_ROLE_ID not in actor["role_ids"]:
-        raise HTTPException(403, "只有系统管理员可以分配管理员角色")
-
-
-@app.get("/api/permissions")
-def list_permissions(request: Request):
-    require_permission(request.state.user, "role:read", "role:manage")
-    return [{"key": key, "label": label} for key, label in PERMISSIONS.items()]
-
-
-@app.get("/api/users")
-def list_users():
-    return auth_store.list_users()
-
-
-@app.post("/api/users", status_code=201)
-def create_user(data: UserCreateInput, request: Request):
-    _check_role_assignment(request.state.user, data.role_ids)
-    try:
-        return auth_store.create_user(data.username, data.display_name, data.password, data.department_id, data.role_ids)
-    except (ValueError, KeyError) as exc:
-        _management_error(exc)
-
-
-@app.put("/api/users/{user_id}")
-def update_user(user_id: str, data: UserUpdateInput, request: Request):
-    target = auth_store.get_user_by_id(user_id)
-    _protect_admin_target(request.state.user, target)
-    if target and set(data.role_ids) != set(target["role_ids"]):
-        _check_role_assignment(request.state.user, data.role_ids)
-        require_permission(request.state.user, "role:manage")
-    try:
-        return auth_store.update_user(user_id, data.display_name, data.department_id, data.is_active, data.role_ids, data.password)
-    except (ValueError, KeyError) as exc:
-        _management_error(exc)
-
-
-@app.delete("/api/users/{user_id}", status_code=204)
-def delete_user(user_id: str, request: Request):
-    _protect_admin_target(request.state.user, auth_store.get_user_by_id(user_id))
-    try:
-        auth_store.delete_user(user_id, request.state.user["id"])
-    except (ValueError, KeyError) as exc:
-        _management_error(exc)
-
-
-@app.get("/api/roles")
-def list_roles():
-    return auth_store.list_roles()
-
-
-@app.post("/api/roles", status_code=201)
-def create_role(data: RoleInput):
-    try:
-        return auth_store.save_role(None, data.name, data.description, data.permissions)
-    except (ValueError, KeyError) as exc:
-        _management_error(exc)
-
-
-@app.put("/api/roles/{role_id}")
-def update_role(role_id: str, data: RoleInput):
-    try:
-        return auth_store.save_role(role_id, data.name, data.description, data.permissions)
-    except (ValueError, KeyError) as exc:
-        _management_error(exc)
-
-
-@app.delete("/api/roles/{role_id}", status_code=204)
-def delete_role(role_id: str):
-    try:
-        auth_store.delete_role(role_id)
-    except (ValueError, KeyError) as exc:
-        _management_error(exc)
-
-
-@app.get("/api/departments")
-def list_departments():
-    return auth_store.list_departments()
-
-
-@app.post("/api/departments", status_code=201)
-def create_department(data: DepartmentInput):
-    try:
-        return auth_store.save_department(None, data.name, data.parent_id, data.sort_order)
-    except (ValueError, KeyError) as exc:
-        _management_error(exc)
-
-
-@app.put("/api/departments/{department_id}")
-def update_department(department_id: str, data: DepartmentInput):
-    try:
-        return auth_store.save_department(department_id, data.name, data.parent_id, data.sort_order)
-    except (ValueError, KeyError) as exc:
-        _management_error(exc)
-
-
-@app.delete("/api/departments/{department_id}", status_code=204)
-def delete_department(department_id: str):
-    try:
-        auth_store.delete_department(department_id)
-    except (ValueError, KeyError) as exc:
-        _management_error(exc)
 
 
 def can_access_meeting(user: dict, meeting: Meeting, manage: bool = False) -> bool:
@@ -291,73 +139,6 @@ def health():
         "llm_provider": settings.llm.provider,
         "llm_model": settings.llm.model,
     }
-
-
-@app.get("/api/model-providers", response_model=list[Provider])
-def list_model_providers():
-    return model_registry.list_providers()
-
-
-@app.post("/api/model-providers", response_model=Provider, status_code=201)
-def create_model_provider(data: ProviderInput):
-    return model_registry.save_provider(uuid4().hex, data)
-
-
-@app.put("/api/model-providers/{provider_id}", response_model=Provider)
-def update_model_provider(provider_id: str, data: ProviderInput):
-    if not model_registry.get_provider(provider_id):
-        raise HTTPException(404, "供应商不存在")
-    return model_registry.save_provider(provider_id, data)
-
-
-@app.delete("/api/model-providers/{provider_id}", status_code=204)
-def delete_model_provider(provider_id: str):
-    if not model_registry.delete_provider(provider_id):
-        raise HTTPException(404, "供应商不存在")
-
-
-async def _fetch_provider_models(provider_id: str) -> list[str]:
-    return await fetch_provider_models(provider_id, model_registry, httpx.AsyncClient)
-
-
-@app.get("/api/model-providers/{provider_id}/models")
-async def list_provider_models(provider_id: str):
-    return {"models": await _fetch_provider_models(provider_id)}
-
-
-@app.post("/api/model-providers/{provider_id}/test")
-async def test_model_provider(provider_id: str):
-    await _fetch_provider_models(provider_id)
-    return {"status": "ok", "message": "连接成功"}
-
-
-@app.get("/api/model-configs", response_model=list[ModelConfig])
-def list_model_configs():
-    return model_registry.list_models()
-
-
-@app.post("/api/model-configs", response_model=ModelConfig, status_code=201)
-def create_model_config(data: ModelConfigInput):
-    try:
-        return model_registry.save_model(uuid4().hex, data)
-    except KeyError as exc:
-        raise HTTPException(400, str(exc.args[0])) from exc
-
-
-@app.put("/api/model-configs/{model_config_id}", response_model=ModelConfig)
-def update_model_config(model_config_id: str, data: ModelConfigInput):
-    if not model_registry.get_model(model_config_id):
-        raise HTTPException(404, "模型配置不存在")
-    try:
-        return model_registry.save_model(model_config_id, data)
-    except KeyError as exc:
-        raise HTTPException(400, str(exc.args[0])) from exc
-
-
-@app.delete("/api/model-configs/{model_config_id}", status_code=204)
-def delete_model_config(model_config_id: str):
-    if not model_registry.delete_model(model_config_id):
-        raise HTTPException(404, "模型配置不存在")
 
 
 @app.post("/api/meetings", response_model=Meeting, status_code=201)
