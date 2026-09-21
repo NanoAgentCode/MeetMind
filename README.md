@@ -2,7 +2,7 @@
 
 基于 React、FastAPI 与 LangGraph 的 AI 会议纪要辅助系统。当前第一阶段已实现：
 
-`上传录音 → 语音转写 → 生成纪要 → 人工修改 → 导出 Word/Markdown`
+`上传录音 → 语音转写 → 生成纪要 → 人工修改 → 会议内容问答 → 导出 Word/Markdown`
 
 ## 技术栈
 
@@ -16,6 +16,8 @@
 后端配置在 `backend/app/config.py` 中按 `app`、`asr`、`llm`、各模型 Provider、`database` 和 `rustfs` 分组；环境变量名称保持扁平格式，兼容 `.env` 与容器部署。
 RustFS 存储桶不存在时，后端会在首次读写对象前自动创建；权限错误等非“不存在”异常不会被忽略。
 会议标题、处理状态、转写内容和结构化纪要存储在 SQLite，默认文件为 `backend/data/meetmind.db`。会议记录页面支持查看、搜索、状态筛选、继续处理和删除；桌面端侧边栏可通过顶部按钮收起或展开。
+
+“模型服务”页面支持管理 OpenAI、Anthropic、Ollama 和 OpenAI-compatible 供应商，并分别配置默认的 LLM 纪要模型、单会议 RAG 问答模型和语音转文字模型。数据库中的启用默认模型优先于 `.env`；未配置时继续使用原有环境变量配置。
 
 ## 快速启动
 

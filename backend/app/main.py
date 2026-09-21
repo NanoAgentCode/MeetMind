@@ -10,8 +10,9 @@ from fastapi.responses import Response
 
 from .config import settings
 from .exporter import docx_bytes, markdown
-from .models import Meeting, Minutes
-from .services import create_minutes, transcribe_audio
+from .model_registry import model_registry
+from .models import Meeting, MeetingAnswer, MeetingQuestion, Minutes, ModelConfig, ModelConfigInput, Provider, ProviderInput
+from .services import answer_meeting_question, create_minutes, transcribe_audio
 from .store import store
 
 app = FastAPI(title="会智录 API", version="0.1.0")
@@ -41,6 +42,84 @@ def health():
         "llm_provider": settings.llm.provider,
         "llm_model": settings.llm.model,
     }
+
+
+@app.get("/api/model-providers", response_model=list[Provider])
+def list_model_providers():
+    return model_registry.list_providers()
+
+
+@app.post("/api/model-providers", response_model=Provider, status_code=201)
+def create_model_provider(data: ProviderInput):
+    return model_registry.save_provider(uuid4().hex, data)
+
+
+@app.put("/api/model-providers/{provider_id}", response_model=Provider)
+def update_model_provider(provider_id: str, data: ProviderInput):
+    if not model_registry.get_provider(provider_id):
+        raise HTTPException(404, "供应商不存在")
+    return model_registry.save_provider(provider_id, data)
+
+
+@app.delete("/api/model-providers/{provider_id}", status_code=204)
+def delete_model_provider(provider_id: str):
+    if not model_registry.delete_provider(provider_id):
+        raise HTTPException(404, "供应商不存在")
+
+
+@app.post("/api/model-providers/{provider_id}/test")
+async def test_model_provider(provider_id: str):
+    credentials = model_registry.get_provider_credentials(provider_id)
+    if not credentials:
+        raise HTTPException(404, "供应商不存在")
+    provider, api_key = credentials
+    if not provider.enabled:
+        raise HTTPException(409, "请先启用供应商")
+    if provider.protocol in {"openai", "openai_compatible"}:
+        url = f"{provider.base_url.rstrip('/')}/models"
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    elif provider.protocol == "anthropic":
+        url = f"{provider.base_url.rstrip('/')}/v1/models"
+        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+    else:
+        url = f"{provider.base_url.rstrip('/')}/api/tags"
+        headers = {}
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(url, headers=headers)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"连接测试失败：{exc}") from exc
+    return {"status": "ok", "message": "连接成功"}
+
+
+@app.get("/api/model-configs", response_model=list[ModelConfig])
+def list_model_configs():
+    return model_registry.list_models()
+
+
+@app.post("/api/model-configs", response_model=ModelConfig, status_code=201)
+def create_model_config(data: ModelConfigInput):
+    try:
+        return model_registry.save_model(uuid4().hex, data)
+    except KeyError as exc:
+        raise HTTPException(400, str(exc.args[0])) from exc
+
+
+@app.put("/api/model-configs/{model_config_id}", response_model=ModelConfig)
+def update_model_config(model_config_id: str, data: ModelConfigInput):
+    if not model_registry.get_model(model_config_id):
+        raise HTTPException(404, "模型配置不存在")
+    try:
+        return model_registry.save_model(model_config_id, data)
+    except KeyError as exc:
+        raise HTTPException(400, str(exc.args[0])) from exc
+
+
+@app.delete("/api/model-configs/{model_config_id}", status_code=204)
+def delete_model_config(model_config_id: str):
+    if not model_registry.delete_model(model_config_id):
+        raise HTTPException(404, "模型配置不存在")
 
 
 @app.post("/api/meetings", response_model=Meeting, status_code=201)
@@ -101,6 +180,15 @@ async def transcribe(meeting_id: str):
             temporary_path.unlink(missing_ok=True)
     meeting.status = "transcribed"
     return store.save(meeting)
+
+
+@app.post("/api/meetings/{meeting_id}/questions", response_model=MeetingAnswer)
+async def ask_meeting(meeting_id: str, data: MeetingQuestion):
+    meeting = require_meeting(meeting_id)
+    try:
+        return MeetingAnswer(answer=await answer_meeting_question(meeting, data.question, model_registry))
+    except (ValueError, httpx.HTTPError) as exc:
+        raise HTTPException(502, f"会议问答失败：{exc}") from exc
 
 
 @app.post("/api/meetings/{meeting_id}/minutes/generate", response_model=Meeting)

@@ -18,3 +18,44 @@ export interface Meeting {
   minutes: Minutes | null
 }
 
+export type ProviderProtocol = 'openai' | 'anthropic' | 'ollama' | 'openai_compatible'
+export type ModelType = 'llm' | 'rag' | 'asr'
+
+export interface ModelProvider {
+  id: string
+  name: string
+  protocol: ProviderProtocol
+  base_url: string
+  enabled: boolean
+  api_key_configured: boolean
+  api_key_masked: string
+  created_at: string
+}
+
+export interface ModelProviderInput {
+  name: string
+  protocol: ProviderProtocol
+  base_url: string
+  api_key: string
+  enabled: boolean
+}
+
+export interface ModelConfig {
+  id: string
+  provider_id: string
+  name: string
+  model_id: string
+  model_type: ModelType
+  enabled: boolean
+  is_default: boolean
+  created_at: string
+}
+
+export interface ModelConfigInput {
+  provider_id: string
+  name: string
+  model_id: string
+  model_type: ModelType
+  enabled: boolean
+  is_default: boolean
+}

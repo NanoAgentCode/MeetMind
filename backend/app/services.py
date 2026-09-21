@@ -7,8 +7,9 @@ import httpx
 from langgraph.graph import END, START, StateGraph
 
 from .config import settings
-from .models import Minutes
-from .providers import build_chat_model
+from .model_registry import ModelRegistry, model_registry
+from .models import Meeting, Minutes
+from .providers import build_chat_model, build_managed_chat_model
 
 
 class WorkflowState(TypedDict, total=False):
@@ -17,7 +18,23 @@ class WorkflowState(TypedDict, total=False):
     minutes: dict
 
 
-async def transcribe_audio(path: Path) -> str:
+async def transcribe_audio(path: Path, registry: ModelRegistry = model_registry) -> str:
+    managed = registry.get_default_model("asr")
+    if managed:
+        model, provider, api_key = managed
+        if provider.protocol not in {"openai", "openai_compatible"}:
+            raise ValueError("语音转文字模型目前仅支持 OpenAI 或 OpenAI Compatible 协议")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        async with httpx.AsyncClient(timeout=180) as client:
+            with path.open("rb") as stream:
+                response = await client.post(
+                    f"{provider.base_url.rstrip('/')}/audio/transcriptions",
+                    headers=headers,
+                    data={"model": model.model_id, "response_format": "json"},
+                    files={"file": (path.name, stream, "application/octet-stream")},
+                )
+        response.raise_for_status()
+        return response.json()["text"].strip()
     if settings.asr.backend == "demo":
         return (
             "主持人：本次会议主要讨论产品第一阶段上线计划。\n"
@@ -63,7 +80,8 @@ def _fallback_minutes(title: str, transcript: str) -> Minutes:
 
 
 async def generate_node(state: WorkflowState) -> WorkflowState:
-    model = build_chat_model()
+    managed = model_registry.get_default_model("llm")
+    model = build_managed_chat_model(*managed) if managed else build_chat_model()
     if model is None:
         result = _fallback_minutes(state["title"], state["transcript"])
     else:
@@ -92,3 +110,26 @@ minutes_graph = builder.compile()
 async def create_minutes(title: str, transcript: str) -> Minutes:
     result = await minutes_graph.ainvoke({"title": title, "transcript": transcript})
     return Minutes.model_validate(result["minutes"])
+
+
+async def answer_meeting_question(
+    meeting: Meeting, question: str, registry: ModelRegistry = model_registry
+) -> str:
+    managed = registry.get_default_model("rag") or registry.get_default_model("llm")
+    model = build_managed_chat_model(*managed) if managed else build_chat_model()
+    context = meeting.transcript
+    if meeting.minutes:
+        context += f"\n结构化纪要：{meeting.minutes.model_dump_json()}"
+    if not context.strip():
+        raise ValueError("该会议尚无可用于问答的转写或纪要")
+    if model is None:
+        return "当前使用演示模型，会议问答需要先在模型服务中配置并启用默认的会议 RAG 或 LLM 模型。"
+    response = await model.ainvoke(
+        "你是会议内容问答助手。只能根据给定会议内容回答；若内容中没有答案，明确回答“会议内容中未提及”，"
+        "不得补充外部知识或编造。\n"
+        f"会议内容：\n{context}\n\n用户问题：{question}"
+    )
+    content = response.content
+    if isinstance(content, str):
+        return content.strip()
+    raise ValueError("模型未返回文本答案")
