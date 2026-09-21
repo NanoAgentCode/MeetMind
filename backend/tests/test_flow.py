@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from backend.app.config import settings
+from backend.app.auth import PERMISSIONS
 from backend.app.main import app
 from backend.app.store import MeetingStore
 import backend.app.main as main_module
@@ -13,7 +14,7 @@ import backend.app.services as services_module
 
 @pytest.fixture(autouse=True)
 def authenticated_test_user(monkeypatch):
-    monkeypatch.setattr(main_module.auth_store, "get_user", lambda _token: {"id": "test-user", "username": "test", "display_name": "测试用户"})
+    monkeypatch.setattr(main_module.auth_store, "get_user", lambda _token: {"id": "test-user", "username": "test", "display_name": "测试用户", "permissions": list(PERMISSIONS), "role_ids": ["system-admin"], "department_id": None})
 
 
 class EmptyModelRegistry:

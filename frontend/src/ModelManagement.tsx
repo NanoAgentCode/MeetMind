@@ -18,7 +18,7 @@ const typeMeta: Record<ModelType, { label: string; description: string; color: s
 const emptyProvider: ModelProviderInput = { name: '', protocol: 'openai_compatible', base_url: '', api_key: '', enabled: true }
 const emptyModel: ModelConfigInput = { provider_id: '', name: '', model_id: '', model_type: 'llm', enabled: true, is_default: false }
 
-export default function ModelManagement() {
+export default function ModelManagement({ canManage = true }: { canManage?: boolean }) {
   const [providers, setProviders] = useState<ModelProvider[]>([])
   const [models, setModels] = useState<ModelConfig[]>([])
   const [loading, setLoading] = useState(true)
@@ -138,7 +138,7 @@ export default function ModelManagement() {
   return <>
     <div className="page-heading models-heading">
       <div><p className="breadcrumb">系统管理&nbsp;&nbsp;/&nbsp;&nbsp;模型服务</p><h1>模型服务</h1><p>统一管理模型供应商，以及会议纪要、内容问答和语音转写所使用的模型</p></div>
-      <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => openProvider()}>添加供应商</Button>
+      {canManage && <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => openProvider()}>添加供应商</Button>}
     </div>
     <Spin spinning={loading}>
       <section className="model-overview">
@@ -152,18 +152,18 @@ export default function ModelManagement() {
         {providers.length ? <div className="provider-grid">{providers.map((item) => <article className="provider-card" key={item.id}>
           <div className="provider-card-head"><span><CloudServerOutlined /></span><div><strong>{item.name}</strong><small>{protocolLabels[item.protocol]}</small></div><Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '已启用' : '已停用'}</Tag></div>
           <p>{item.base_url}</p><div className="provider-secret"><span>API KEY</span><code>{item.api_key_masked || '未配置'}</code></div>
-          <div className="card-actions"><Button aria-label="获取模型列表" title="获取模型列表" icon={<UnorderedListOutlined />} loading={loadingModels === item.id} onClick={() => fetchModels(item.id, true)}><span className="action-label">模型</span></Button><Button aria-label="测试供应商连接" title="测试供应商连接" icon={<ApiOutlined />} loading={testingProvider === item.id} onClick={() => testProvider(item)}><span className="action-label">测试</span></Button><Button aria-label="编辑供应商" title="编辑供应商" icon={<EditOutlined />} onClick={() => openProvider(item)}><span className="action-label">编辑</span></Button><Button aria-label="删除供应商" title="删除供应商" danger icon={<DeleteOutlined />} onClick={() => removeProvider(item)}><span className="action-label">删除</span></Button></div>
-        </article>)}</div> : <Empty description="还没有供应商配置"><Button type="primary" onClick={() => openProvider()}>添加第一个供应商</Button></Empty>}
+          <div className="card-actions"><Button aria-label="获取模型列表" title="获取模型列表" icon={<UnorderedListOutlined />} loading={loadingModels === item.id} onClick={() => fetchModels(item.id, true)}><span className="action-label">模型</span></Button>{canManage && <><Button aria-label="测试供应商连接" title="测试供应商连接" icon={<ApiOutlined />} loading={testingProvider === item.id} onClick={() => testProvider(item)}><span className="action-label">测试</span></Button><Button aria-label="编辑供应商" title="编辑供应商" icon={<EditOutlined />} onClick={() => openProvider(item)}><span className="action-label">编辑</span></Button><Button aria-label="删除供应商" title="删除供应商" danger icon={<DeleteOutlined />} onClick={() => removeProvider(item)}><span className="action-label">删除</span></Button></>}</div>
+        </article>)}</div> : <Empty description="还没有供应商配置">{canManage && <Button type="primary" onClick={() => openProvider()}>添加第一个供应商</Button>}</Empty>}
       </section>
       <section className="management-section">
-        <div className="management-head"><div><h2>模型配置</h2><p>每种类型最多设置一个默认模型，业务调用将优先使用默认配置</p></div><Button icon={<PlusOutlined />} disabled={!providers.length} onClick={() => void openModel()}>添加模型</Button></div>
+        <div className="management-head"><div><h2>模型配置</h2><p>每种类型最多设置一个默认模型，业务调用将优先使用默认配置</p></div>{canManage && <Button icon={<PlusOutlined />} disabled={!providers.length} onClick={() => void openModel()}>添加模型</Button>}</div>
         {models.length ? <div className="model-list">{models.map((item) => <article key={item.id}>
           <span className={`model-type-icon ${item.model_type}`}>{item.model_type === 'asr' ? <ApiOutlined /> : <RobotOutlined />}</span>
           <div className="model-identity"><strong>{item.name}{item.is_default && <Tag color={typeMeta[item.model_type].color}>默认</Tag>}</strong><small>{item.model_id}</small></div>
           <div className="model-provider"><small>供应商</small><strong>{providerNames[item.provider_id] || '未知供应商'}</strong></div>
           <Tag color={typeMeta[item.model_type].color}>{typeMeta[item.model_type].label}</Tag>
           <Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '可用' : '停用'}</Tag>
-          <div className="card-actions"><Button type="text" icon={<EditOutlined />} onClick={() => void openModel(item)} /><Button danger type="text" icon={<DeleteOutlined />} onClick={() => removeModel(item)} /></div>
+          {canManage && <div className="card-actions"><Button type="text" icon={<EditOutlined />} onClick={() => void openModel(item)} /><Button danger type="text" icon={<DeleteOutlined />} onClick={() => removeModel(item)} /></div>}
         </article>)}</div> : <Empty description={providers.length ? '还没有模型配置' : '请先添加供应商'} />}
       </section>
     </Spin>

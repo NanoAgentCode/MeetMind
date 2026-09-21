@@ -2,8 +2,9 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Modal } from 'antd'
 import App from './App'
-import { getCurrentUser, listNotifications, login, logout } from './api'
+import { createDepartment, getCurrentUser, listNotifications, login, logout } from './api'
 
 class ResizeObserverMock {
   observe() {}
@@ -29,11 +30,16 @@ vi.mock('./api', () => ({
   listMeetings: vi.fn().mockResolvedValue([{ id: 'meeting-1', filename: 'weekly.mp3', title: '产品周会', created_at: '2026-09-21T00:00:00Z', status: 'transcribed', transcript: '周五发布', minutes: null }]), listModelConfigs: vi.fn().mockResolvedValue([]), listProviderModels: vi.fn().mockResolvedValue(['gpt-4o-mini', 'qwen3']),
   listModelProviders: vi.fn().mockResolvedValue([{ id: 'provider-1', name: '企业模型', protocol: 'openai_compatible', base_url: 'https://llm.example.com/v1', enabled: true, api_key_configured: true, api_key_masked: 'sk-••••test', created_at: '2026-09-21T00:00:00Z' }]), saveMinutes: vi.fn(), transcribeMeeting: vi.fn(),
   testModelProvider: vi.fn(), updateModelConfig: vi.fn(), updateModelProvider: vi.fn(), uploadRecording: vi.fn(),
-  getCurrentUser: vi.fn().mockResolvedValue({ id: 'test-user', username: 'test', display_name: '测试用户' }),
+  getCurrentUser: vi.fn().mockResolvedValue({ id: 'test-user', username: 'test', display_name: '测试用户', department_id: null, is_active: true, role_ids: ['system-admin'], permissions: ['meeting:create', 'meeting:read_all', 'meeting:manage_all', 'chat:use', 'model:read', 'model:manage', 'user:read', 'user:manage', 'role:read', 'role:manage', 'department:read', 'department:manage'] }),
   getMeeting: vi.fn(), listNotifications: vi.fn().mockResolvedValue([]), login: vi.fn(), logout: vi.fn(), markNotificationRead: vi.fn(),
+  listUsers: vi.fn().mockResolvedValue([{ id: 'test-user', username: 'test', display_name: '测试用户', department_id: null, is_active: true, role_ids: ['system-admin'], permissions: ['user:manage'] }]),
+  listRoles: vi.fn().mockResolvedValue([{ id: 'system-admin', name: '系统管理员', description: '拥有全部权限', is_system: true, permissions: ['user:manage'], member_count: 1 }]),
+  listDepartments: vi.fn().mockResolvedValue([{ id: 'dept-1', name: '研发中心', parent_id: null, sort_order: 0, member_count: 0 }]),
+  listPermissions: vi.fn().mockResolvedValue([{ key: 'user:manage', label: '管理用户及其角色' }]),
+  createUser: vi.fn(), updateUser: vi.fn(), deleteUser: vi.fn(), createRole: vi.fn(), updateRole: vi.fn(), deleteRole: vi.fn(), createDepartment: vi.fn(), updateDepartment: vi.fn(), deleteDepartment: vi.fn(),
 }))
 
-afterEach(cleanup)
+afterEach(() => { Modal.destroyAll(); cleanup(); document.querySelectorAll('.ant-modal-root').forEach((node) => node.remove()) })
 
 describe('account and notifications', () => {
   it('confirms logout from the sidebar user card', async () => {
@@ -56,7 +62,7 @@ describe('account and notifications', () => {
 
   it('requires login before showing the workspace', async () => {
     vi.mocked(getCurrentUser).mockRejectedValueOnce(new Error('unauthorized'))
-    vi.mocked(login).mockResolvedValueOnce({ id: 'user-1', username: 'admin', display_name: '系统管理员' })
+    vi.mocked(login).mockResolvedValueOnce({ id: 'user-1', username: 'admin', display_name: '系统管理员', department_id: null, is_active: true, role_ids: ['system-admin'], permissions: ['meeting:create', 'meeting:read_all', 'meeting:manage_all', 'chat:use', 'model:read', 'model:manage', 'user:read', 'user:manage', 'role:read', 'role:manage', 'department:read', 'department:manage'] })
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument()
@@ -73,6 +79,36 @@ describe('account and notifications', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: '通知' }))
     expect(await screen.findByText('产品周会已完成语音转写')).toBeInTheDocument()
+  })
+})
+
+describe('RBAC navigation', () => {
+  it('opens user, role and department management', async () => {
+    vi.mocked(createDepartment).mockResolvedValueOnce({ id: 'dept-2', name: '产品部', parent_id: null, sort_order: 0, member_count: 0 })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: /权限管理/ }))
+    expect(await screen.findByRole('heading', { name: '组织与权限' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /添加用户/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: '角色权限' }))
+    expect(await screen.findByRole('button', { name: /添加角色/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: '部门管理' }))
+    expect(await screen.findByRole('button', { name: /添加部门/ })).toBeInTheDocument()
+    expect(await screen.findByText('研发中心 · 0 人')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /添加部门/ }))
+    const dialog = await screen.findByRole('dialog', { name: '添加部门' })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '部门名称' }), { target: { value: '产品部' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /保\s*存/ }))
+    expect(createDepartment).toHaveBeenCalledWith({ name: '产品部', parent_id: null, sort_order: 0 })
+  })
+
+  it('hides management entries for a regular member', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValueOnce({ id: 'member', username: 'member', display_name: '普通成员', department_id: null, is_active: true, role_ids: ['member'], permissions: ['meeting:create', 'meeting:read_own', 'meeting:manage_own', 'chat:use', 'model:read'] })
+    render(<App />)
+    await screen.findByRole('button', { name: '收起侧边栏' })
+    expect(screen.queryByRole('button', { name: /权限管理/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /模型服务/ }))
+    expect(await screen.findByRole('heading', { name: '模型服务' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '添加供应商' })).not.toBeInTheDocument()
   })
 })
 

@@ -4,7 +4,7 @@ import { Button, Empty, Input, Spin, Tag, message } from 'antd'
 import { chat, listMeetings } from './api'
 import type { ChatMessage, Meeting } from './types'
 
-export default function MeetingChat({ initialMeeting = null }: { initialMeeting?: Meeting | null }) {
+export default function MeetingChat({ initialMeeting = null, canBrowseMeetings = true }: { initialMeeting?: Meeting | null; canBrowseMeetings?: boolean }) {
   const [meetings, setMeetings] = useState<Meeting[]>([])
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(initialMeeting)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -19,11 +19,12 @@ export default function MeetingChat({ initialMeeting = null }: { initialMeeting?
   ), [meetings, mentionTerm])
 
   useEffect(() => {
+    if (!canBrowseMeetings) { setMeetingsLoading(false); return }
     listMeetings()
       .then(setMeetings)
       .catch(() => message.error('会议列表加载失败'))
       .finally(() => setMeetingsLoading(false))
-  }, [])
+  }, [canBrowseMeetings])
 
   function chooseMeeting(item: Meeting) {
     setSelectedMeeting(item)

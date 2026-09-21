@@ -5,6 +5,7 @@ import pytest
 
 import backend.app.main as main_module
 from backend.app.main import app
+from backend.app.auth import PERMISSIONS
 from backend.app.model_registry import ModelRegistry
 from backend.app.models import Meeting, ProviderInput
 from backend.app.store import MeetingStore
@@ -13,7 +14,7 @@ from backend.tests.test_flow import MemoryObjectStorage
 
 @pytest.fixture(autouse=True)
 def authenticated_test_user(monkeypatch):
-    monkeypatch.setattr(main_module.auth_store, "get_user", lambda _token: {"id": "test-user", "username": "test", "display_name": "测试用户"})
+    monkeypatch.setattr(main_module.auth_store, "get_user", lambda _token: {"id": "test-user", "username": "test", "display_name": "测试用户", "permissions": list(PERMISSIONS), "role_ids": ["system-admin"], "department_id": None})
 
 
 class FakeModelResponse:

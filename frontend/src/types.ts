@@ -1,6 +1,22 @@
 export type MeetingStatus = 'uploaded' | 'queued' | 'transcribing' | 'transcription_failed' | 'transcribed' | 'generated' | 'edited'
 
-export interface User { id: string; username: string; display_name: string }
+export interface User {
+  id: string
+  username: string
+  display_name: string
+  department_id: string | null
+  is_active: boolean
+  role_ids: string[]
+  permissions: string[]
+}
+
+export interface Role { id: string; name: string; description: string; is_system: boolean; permissions: string[]; member_count: number }
+export interface RoleInput { name: string; description: string; permissions: string[] }
+export interface Department { id: string; name: string; parent_id: string | null; sort_order: number; member_count: number }
+export interface DepartmentInput { name: string; parent_id: string | null; sort_order: number }
+export interface UserCreateInput { username: string; display_name: string; password: string; department_id: string | null; role_ids: string[] }
+export interface UserUpdateInput { display_name: string; password?: string; department_id: string | null; role_ids: string[]; is_active: boolean }
+export interface PermissionItem { key: string; label: string }
 
 export interface AppNotification {
   id: string

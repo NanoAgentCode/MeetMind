@@ -100,8 +100,7 @@ def test_meeting_is_private_to_owner(monkeypatch, tmp_path):
     client = TestClient(app)
     login(client)
     meeting_id = client.post("/api/meetings", data={"title": "私有会议"}, files={"file": ("private.mp3", b"audio", "audio/mpeg")}).json()["id"]
-    with auth_store._connect() as connection:
-        connection.execute("INSERT INTO users VALUES (?, ?, ?, ?)", ("other-user", "other", auth_store._hash_password("other-password"), "另一用户"))
+    auth_store.create_user("other", "另一用户", "other-password", None, ["member"])
     other = TestClient(app)
     assert other.post("/api/auth/login", json={"username": "other", "password": "other-password"}).status_code == 200
     assert other.get("/api/meetings").json() == []

@@ -11,11 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from .config import settings
-from .auth import auth_store
+from .auth import ADMIN_ROLE_ID, MEMBER_ROLE_ID, PERMISSIONS, auth_store
 from .exporter import docx_bytes, markdown
 from .model_registry import model_registry
 from .models import ChatRequest, ChatResponse, Meeting, MeetingAnswer, MeetingQuestion, Minutes, ModelConfig, ModelConfigInput, Provider, ProviderInput
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from .services import answer_chat, answer_meeting_question, create_minutes, transcribe_audio
 from .store import store
 
@@ -48,6 +48,64 @@ class LoginInput(BaseModel):
     password: str
 
 
+class UserCreateInput(BaseModel):
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
+    display_name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=256)
+    department_id: str | None = None
+    role_ids: list[str] = Field(default_factory=lambda: [MEMBER_ROLE_ID])
+
+
+class UserUpdateInput(BaseModel):
+    display_name: str = Field(min_length=1, max_length=100)
+    department_id: str | None = None
+    is_active: bool = True
+    role_ids: list[str] = Field(min_length=1)
+    password: str | None = Field(default=None, min_length=8, max_length=256)
+
+
+class RoleInput(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=300)
+    permissions: list[str] = Field(default_factory=list)
+
+
+class DepartmentInput(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    parent_id: str | None = None
+    sort_order: int = 0
+
+
+def has_permission(user: dict, permission: str) -> bool:
+    return permission in user.get("permissions", [])
+
+
+def require_permission(user: dict, *permissions: str):
+    if not any(has_permission(user, permission) for permission in permissions):
+        raise HTTPException(403, "权限不足")
+
+
+def required_route_permissions(path: str, method: str) -> tuple[str, ...]:
+    if path.startswith("/api/users"):
+        return ("user:read", "user:manage") if method == "GET" else ("user:manage",)
+    if path.startswith("/api/roles"):
+        return ("role:read", "role:manage", "user:manage") if method == "GET" else ("role:manage",)
+    if path.startswith("/api/departments"):
+        return ("department:read", "department:manage", "user:manage") if method == "GET" else ("department:manage",)
+    if path.startswith(("/api/model-providers", "/api/model-configs")):
+        return ("model:read", "model:manage") if method == "GET" else ("model:manage",)
+    if path == "/api/chat" or path.endswith("/questions"):
+        return ("chat:use",)
+    if path == "/api/meetings" and method == "POST":
+        return ("meeting:create",)
+    if path.startswith("/api/meetings"):
+        if method == "GET":
+            return ("meeting:read_own", "meeting:read_department", "meeting:read_all",
+                    "meeting:manage_own", "meeting:manage_department", "meeting:manage_all")
+        return ("meeting:manage_own", "meeting:manage_department", "meeting:manage_all")
+    return ()
+
+
 @app.middleware("http")
 async def require_login(request: Request, call_next):
     if request.method == "OPTIONS" or not request.url.path.startswith("/api/") or request.url.path in {"/api/health", "/api/auth/login"}:
@@ -56,14 +114,17 @@ async def require_login(request: Request, call_next):
     if not user:
         return Response(status_code=401, content='{"detail":"请先登录"}', media_type="application/json")
     request.state.user = user
+    required = required_route_permissions(request.url.path, request.method)
+    if required and not any(has_permission(user, permission) for permission in required):
+        return Response(status_code=403, content='{"detail":"权限不足"}', media_type="application/json")
     return await call_next(request)
 
 
 @app.post("/api/auth/login")
 def login(data: LoginInput, response: FastAPIResponse):
-    if not settings.app.admin_username or not settings.app.admin_password:
-        raise HTTPException(503, "请先配置 ADMIN_USERNAME 和 ADMIN_PASSWORD")
     auth_store.bootstrap_admin()
+    if not auth_store.has_users():
+        raise HTTPException(503, "请先配置 ADMIN_USERNAME 和 ADMIN_PASSWORD")
     user = auth_store.authenticate(data.username, data.password)
     if not user:
         raise HTTPException(401, "账号或密码错误")
@@ -94,9 +155,144 @@ def mark_notification_read(notification_id: str, request: Request):
         raise HTTPException(404, "通知不存在")
 
 
-def require_meeting(meeting_id: str, user_id: str | None = None) -> Meeting:
+def _management_error(exc: Exception):
+    if isinstance(exc, KeyError):
+        raise HTTPException(404, str(exc.args[0])) from exc
+    raise HTTPException(409, str(exc)) from exc
+
+
+def _protect_admin_target(actor: dict, target: dict | None):
+    if target and ADMIN_ROLE_ID in target["role_ids"] and ADMIN_ROLE_ID not in actor["role_ids"]:
+        raise HTTPException(403, "只有系统管理员可以管理管理员账号")
+
+
+def _check_role_assignment(actor: dict, role_ids: list[str]):
+    if not has_permission(actor, "role:manage") and set(role_ids) != {MEMBER_ROLE_ID}:
+        raise HTTPException(403, "分配角色需要角色管理权限")
+    if ADMIN_ROLE_ID in role_ids and ADMIN_ROLE_ID not in actor["role_ids"]:
+        raise HTTPException(403, "只有系统管理员可以分配管理员角色")
+
+
+@app.get("/api/permissions")
+def list_permissions(request: Request):
+    require_permission(request.state.user, "role:read", "role:manage")
+    return [{"key": key, "label": label} for key, label in PERMISSIONS.items()]
+
+
+@app.get("/api/users")
+def list_users():
+    return auth_store.list_users()
+
+
+@app.post("/api/users", status_code=201)
+def create_user(data: UserCreateInput, request: Request):
+    _check_role_assignment(request.state.user, data.role_ids)
+    try:
+        return auth_store.create_user(data.username, data.display_name, data.password, data.department_id, data.role_ids)
+    except (ValueError, KeyError) as exc:
+        _management_error(exc)
+
+
+@app.put("/api/users/{user_id}")
+def update_user(user_id: str, data: UserUpdateInput, request: Request):
+    target = auth_store.get_user_by_id(user_id)
+    _protect_admin_target(request.state.user, target)
+    if target and set(data.role_ids) != set(target["role_ids"]):
+        _check_role_assignment(request.state.user, data.role_ids)
+        require_permission(request.state.user, "role:manage")
+    try:
+        return auth_store.update_user(user_id, data.display_name, data.department_id, data.is_active, data.role_ids, data.password)
+    except (ValueError, KeyError) as exc:
+        _management_error(exc)
+
+
+@app.delete("/api/users/{user_id}", status_code=204)
+def delete_user(user_id: str, request: Request):
+    _protect_admin_target(request.state.user, auth_store.get_user_by_id(user_id))
+    try:
+        auth_store.delete_user(user_id, request.state.user["id"])
+    except (ValueError, KeyError) as exc:
+        _management_error(exc)
+
+
+@app.get("/api/roles")
+def list_roles():
+    return auth_store.list_roles()
+
+
+@app.post("/api/roles", status_code=201)
+def create_role(data: RoleInput):
+    try:
+        return auth_store.save_role(None, data.name, data.description, data.permissions)
+    except (ValueError, KeyError) as exc:
+        _management_error(exc)
+
+
+@app.put("/api/roles/{role_id}")
+def update_role(role_id: str, data: RoleInput):
+    try:
+        return auth_store.save_role(role_id, data.name, data.description, data.permissions)
+    except (ValueError, KeyError) as exc:
+        _management_error(exc)
+
+
+@app.delete("/api/roles/{role_id}", status_code=204)
+def delete_role(role_id: str):
+    try:
+        auth_store.delete_role(role_id)
+    except (ValueError, KeyError) as exc:
+        _management_error(exc)
+
+
+@app.get("/api/departments")
+def list_departments():
+    return auth_store.list_departments()
+
+
+@app.post("/api/departments", status_code=201)
+def create_department(data: DepartmentInput):
+    try:
+        return auth_store.save_department(None, data.name, data.parent_id, data.sort_order)
+    except (ValueError, KeyError) as exc:
+        _management_error(exc)
+
+
+@app.put("/api/departments/{department_id}")
+def update_department(department_id: str, data: DepartmentInput):
+    try:
+        return auth_store.save_department(department_id, data.name, data.parent_id, data.sort_order)
+    except (ValueError, KeyError) as exc:
+        _management_error(exc)
+
+
+@app.delete("/api/departments/{department_id}", status_code=204)
+def delete_department(department_id: str):
+    try:
+        auth_store.delete_department(department_id)
+    except (ValueError, KeyError) as exc:
+        _management_error(exc)
+
+
+def can_access_meeting(user: dict, meeting: Meeting, manage: bool = False) -> bool:
+    if has_permission(user, "meeting:manage_all") or (not manage and has_permission(user, "meeting:read_all")):
+        return True
+    own_permission = "meeting:manage_own" if manage else "meeting:read_own"
+    department_permission = "meeting:manage_department" if manage else "meeting:read_department"
+    if meeting.owner_id == user["id"] and (has_permission(user, own_permission) or
+                                             (not manage and has_permission(user, "meeting:manage_own"))):
+        return True
+    department_id = user.get("department_id")
+    if department_id and (has_permission(user, department_permission) or
+                          (not manage and has_permission(user, "meeting:manage_department"))):
+        owner = auth_store.get_user_by_id(meeting.owner_id) if meeting.owner_id else None
+        if owner and owner["department_id"] in auth_store.descendant_department_ids(department_id):
+            return True
+    return False
+
+
+def require_meeting(meeting_id: str, user: dict, manage: bool = False) -> Meeting:
     meeting = store.get(meeting_id)
-    if not meeting or (user_id and meeting.owner_id != user_id):
+    if not meeting or not can_access_meeting(user, meeting, manage):
         raise HTTPException(404, "会议不存在")
     return meeting
 
@@ -284,23 +480,23 @@ async def upload_meeting(request: Request, file: UploadFile = File(...), title: 
 
 @app.get("/api/meetings", response_model=list[Meeting])
 def list_meetings(request: Request):
-    return store.list(request.state.user["id"])
+    return [meeting for meeting in store.list() if can_access_meeting(request.state.user, meeting)]
 
 
 @app.get("/api/meetings/{meeting_id}", response_model=Meeting)
 def get_meeting(meeting_id: str, request: Request):
-    return require_meeting(meeting_id, request.state.user["id"])
+    return require_meeting(meeting_id, request.state.user)
 
 
 @app.delete("/api/meetings/{meeting_id}", status_code=204)
 def delete_meeting(meeting_id: str, request: Request):
-    meeting = require_meeting(meeting_id, request.state.user["id"])
+    meeting = require_meeting(meeting_id, request.state.user, manage=True)
     store.delete(meeting)
 
 
 @app.post("/api/meetings/{meeting_id}/transcribe", response_model=Meeting)
 async def transcribe(meeting_id: str, request: Request):
-    meeting = require_meeting(meeting_id, request.state.user["id"])
+    meeting = require_meeting(meeting_id, request.state.user, manage=True)
     if meeting.status not in {"uploaded", "transcription_failed"}:
         raise HTTPException(409, "当前会议无法开始转写")
     temporary_path: Path | None = None
@@ -321,7 +517,7 @@ async def transcribe(meeting_id: str, request: Request):
 
 @app.post("/api/meetings/{meeting_id}/questions", response_model=MeetingAnswer)
 async def ask_meeting(meeting_id: str, data: MeetingQuestion, request: Request):
-    meeting = require_meeting(meeting_id, request.state.user["id"])
+    meeting = require_meeting(meeting_id, request.state.user)
     try:
         return MeetingAnswer(answer=await answer_meeting_question(meeting, data.question, model_registry))
     except (ValueError, httpx.HTTPError) as exc:
@@ -330,7 +526,7 @@ async def ask_meeting(meeting_id: str, data: MeetingQuestion, request: Request):
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(data: ChatRequest, request: Request):
-    meeting = require_meeting(data.meeting_id, request.state.user["id"]) if data.meeting_id else None
+    meeting = require_meeting(data.meeting_id, request.state.user) if data.meeting_id else None
     try:
         answer = await answer_chat(data.question, data.history, meeting, model_registry)
         return ChatResponse(answer=answer, meeting_id=data.meeting_id)
@@ -340,7 +536,7 @@ async def chat(data: ChatRequest, request: Request):
 
 @app.post("/api/meetings/{meeting_id}/minutes/generate", response_model=Meeting)
 async def generate(meeting_id: str, request: Request):
-    meeting = require_meeting(meeting_id, request.state.user["id"])
+    meeting = require_meeting(meeting_id, request.state.user, manage=True)
     if not meeting.transcript:
         raise HTTPException(409, "请先完成语音转写")
     try:
@@ -353,7 +549,7 @@ async def generate(meeting_id: str, request: Request):
 
 @app.put("/api/meetings/{meeting_id}/minutes", response_model=Meeting)
 def update_minutes(meeting_id: str, minutes: Minutes, request: Request):
-    meeting = require_meeting(meeting_id, request.state.user["id"])
+    meeting = require_meeting(meeting_id, request.state.user, manage=True)
     if meeting.minutes is None:
         raise HTTPException(409, "请先生成会议纪要")
     meeting.minutes = minutes
@@ -363,7 +559,7 @@ def update_minutes(meeting_id: str, minutes: Minutes, request: Request):
 
 @app.get("/api/meetings/{meeting_id}/export")
 def export_minutes(meeting_id: str, request: Request, format: str = "docx"):
-    meeting = require_meeting(meeting_id, request.state.user["id"])
+    meeting = require_meeting(meeting_id, request.state.user)
     if meeting.status != "edited" or meeting.minutes is None:
         raise HTTPException(409, "请先保存人工定稿，再导出")
     safe_name = f"meeting-{meeting.id[:8]}"

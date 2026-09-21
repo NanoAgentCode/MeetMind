@@ -11,6 +11,7 @@ import { deleteMeeting, generateMinutes, getCurrentUser, getMeeting, listMeeting
 import type { AppNotification, Meeting, Minutes, User } from './types'
 import MeetingChat from './MeetingChat'
 import ModelManagement from './ModelManagement'
+import AccessManagement from './AccessManagement'
 
 const { TextArea } = Input
 const phases = [
@@ -50,7 +51,7 @@ function formatDate(value?: string) {
 
 function RecordsPage({
   records, visibleRecords, loading, query, statusFilter, onQueryChange,
-  onStatusChange, onRefresh, onOpen, onChat, onDelete, onCreate,
+  onStatusChange, onRefresh, onOpen, onChat, onDelete, onCreate, canCreate, canChat, canManage,
 }: {
   records: Meeting[]
   visibleRecords: Meeting[]
@@ -64,6 +65,9 @@ function RecordsPage({
   onChat: (meeting: Meeting) => void
   onDelete: (meeting: Meeting) => void
   onCreate: () => void
+  canCreate: boolean
+  canChat: boolean
+  canManage: boolean
 }) {
   const completed = records.filter((item) => item.status === 'edited').length
   const processing = records.length - completed
@@ -86,14 +90,14 @@ function RecordsPage({
     },
     {
       title: '操作', key: 'actions', width: 130, align: 'right' as const,
-      render: (_: unknown, item: Meeting) => <div className="record-actions"><Button size="small" icon={<FolderOpenOutlined />} aria-label={`打开${item.title}`} title="打开会议" onClick={() => onOpen(item)} /><Button size="small" icon={<MessageOutlined />} aria-label={`去对话${item.title}`} title="去对话" onClick={() => onChat(item)} /><Button size="small" danger icon={<DeleteOutlined />} aria-label={`删除${item.title}`} title="删除会议" onClick={() => onDelete(item)} /></div>,
+      render: (_: unknown, item: Meeting) => <div className="record-actions"><Button size="small" icon={<FolderOpenOutlined />} aria-label={`打开${item.title}`} title="打开会议" onClick={() => onOpen(item)} />{canChat && <Button size="small" icon={<MessageOutlined />} aria-label={`去对话${item.title}`} title="去对话" onClick={() => onChat(item)} />}{canManage && <Button size="small" danger icon={<DeleteOutlined />} aria-label={`删除${item.title}`} title="删除会议" onClick={() => onDelete(item)} />}</div>,
     },
   ]
 
   return <>
     <div className="page-heading records-heading">
       <div><p className="breadcrumb">工作台&nbsp;&nbsp;/&nbsp;&nbsp;会议记录</p><h1>会议记录</h1><p>统一管理会议录音、转写内容与会议纪要</p></div>
-      <Button type="primary" size="large" icon={<PlusOutlined />} onClick={onCreate}>新建会议</Button>
+      {canCreate && <Button type="primary" size="large" icon={<PlusOutlined />} onClick={onCreate}>新建会议</Button>}
     </div>
     <section className="record-stats">
       <div><span className="stat-icon blue"><FolderOpenOutlined /></span><div><small>全部会议</small><strong>{records.length}</strong></div></div>
@@ -107,7 +111,7 @@ function RecordsPage({
         <Button onClick={onRefresh} loading={loading}>刷新</Button>
       </div>
       <Spin spinning={loading}>
-        <Table<Meeting> rowKey="id" columns={columns} dataSource={visibleRecords} pagination={{ pageSize: 8, showTotal: (total) => `共 ${total} 条记录` }} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={query || statusFilter !== 'all' ? '没有符合条件的会议记录' : '暂无会议记录'}><Button type="primary" onClick={onCreate}>创建第一场会议</Button></Empty> }} />
+        <Table<Meeting> rowKey="id" columns={columns} dataSource={visibleRecords} pagination={{ pageSize: 8, showTotal: (total) => `共 ${total} 条记录` }} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={query || statusFilter !== 'all' ? '没有符合条件的会议记录' : '暂无会议记录'}>{canCreate && <Button type="primary" onClick={onCreate}>创建第一场会议</Button>}</Empty> }} />
       </Spin>
     </section>
   </>
@@ -122,7 +126,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const seenNotificationIds = useRef<Set<string> | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [page, setPage] = useState<'workspace' | 'records' | 'chat' | 'models'>('workspace')
+  const [page, setPage] = useState<'workspace' | 'records' | 'chat' | 'models' | 'access'>('workspace')
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [title, setTitle] = useState('')
   const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -134,6 +138,20 @@ export default function App() {
   const [recordsLoaded, setRecordsLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const can = (permission: string) => !!user?.permissions.includes(permission)
+  const canReadMeetings = ['meeting:read_own', 'meeting:read_department', 'meeting:read_all', 'meeting:manage_own', 'meeting:manage_department', 'meeting:manage_all'].some(can)
+  const canManageMeetings = ['meeting:manage_own', 'meeting:manage_department', 'meeting:manage_all'].some(can)
+  const canViewAccess = ['user:read', 'user:manage', 'role:read', 'role:manage', 'department:read', 'department:manage'].some(can)
+
+  useEffect(() => {
+    if (!user) return
+    if (page === 'workspace' && !meeting && !can('meeting:create')) {
+      if (canReadMeetings) setPage('records')
+      else if (can('chat:use')) setPage('chat')
+      else if (can('model:read') || can('model:manage')) setPage('models')
+      else if (canViewAccess) setPage('access')
+    } else if (page === 'access' && !canViewAccess) setPage('workspace')
+  }, [user, page, meeting, canReadMeetings, canViewAccess])
   const current = meeting ? rank[meeting.status] : -1
   const filename = useMemo(() => fileList[0]?.name || '', [fileList])
   const visibleRecords = useMemo(() => records.filter((item) => {
@@ -334,12 +352,12 @@ export default function App() {
           <p>协作空间</p>
           {navigation.map(({ key, label, icon: Icon }) => {
             const active = page === key
-            const available = key === 'workspace' || key === 'records' || key === 'chat'
+            const available = key === 'workspace' ? can('meeting:create') || canReadMeetings : key === 'records' ? canReadMeetings : key === 'chat' ? can('chat:use') : false
             return <button className={active ? 'active' : ''} key={key} type="button" disabled={!available} title={available ? label : `${label}（即将开放）`} onClick={() => available && (key === 'workspace' ? openWorkspace(meeting || undefined) : key === 'chat' ? openChat() : setPage('records'))}><Icon /><span className="nav-label">{label}</span>{active && <i />}</button>
           })}
           <p>系统管理</p>
-          <button className={page === 'models' ? 'active' : ''} type="button" onClick={() => setPage('models')}><CloudServerOutlined /><span className="nav-label">模型服务</span>{page === 'models' && <i />}</button>
-          <button type="button"><SafetyCertificateOutlined /><span className="nav-label">权限管理</span></button>
+          {(can('model:read') || can('model:manage')) && <button className={page === 'models' ? 'active' : ''} type="button" onClick={() => setPage('models')}><CloudServerOutlined /><span className="nav-label">模型服务</span>{page === 'models' && <i />}</button>}
+          {canViewAccess && <button className={page === 'access' ? 'active' : ''} type="button" onClick={() => setPage('access')}><SafetyCertificateOutlined /><span className="nav-label">权限管理</span>{page === 'access' && <i />}</button>}
           <button type="button"><SettingOutlined /><span className="nav-label">系统设置</span></button>
         </nav>
         <div className="sidebar-footer">
@@ -366,7 +384,7 @@ export default function App() {
         </header>
 
         <main className="content">
-          {page === 'models' ? <ModelManagement /> : page === 'chat' ? <MeetingChat initialMeeting={chatMeeting} /> : page === 'records' ? <RecordsPage
+          {page === 'access' ? <AccessManagement currentUser={user} onPermissionsChanged={() => void getCurrentUser().then(setUser)} /> : page === 'models' ? <ModelManagement canManage={can('model:manage')} /> : page === 'chat' ? <MeetingChat initialMeeting={chatMeeting} canBrowseMeetings={canReadMeetings} /> : page === 'records' ? <RecordsPage
             records={records}
             visibleRecords={visibleRecords}
             loading={recordsLoading}
@@ -379,10 +397,13 @@ export default function App() {
             onChat={openChat}
             onDelete={confirmDelete}
             onCreate={() => openWorkspace()}
+            canCreate={can('meeting:create')}
+            canChat={can('chat:use')}
+            canManage={canManageMeetings}
           /> : <>
           <div className="page-heading">
             <div><p className="breadcrumb">工作台&nbsp;&nbsp;/&nbsp;&nbsp;智能纪要</p><h1>{meeting ? meeting.title : '智能会议纪要'}</h1><p>{meeting ? `${meeting.filename} · ${formatDate(meeting.created_at)}` : '从会议录音中快速提炼共识、决策与行动事项'}</p></div>
-            {meeting && <div className="meeting-heading-actions"><Tag className="meeting-tag" icon={<CheckCircleFilled />}>处理中</Tag><Button icon={<PlusOutlined />} onClick={() => openWorkspace()}>新建会议</Button></div>}
+            {meeting && <div className="meeting-heading-actions"><Tag className="meeting-tag" icon={<CheckCircleFilled />}>处理中</Tag>{can('meeting:create') && <Button icon={<PlusOutlined />} onClick={() => openWorkspace()}>新建会议</Button>}</div>}
           </div>
 
           <section className="progress-panel" aria-label="处理进度">
@@ -397,7 +418,7 @@ export default function App() {
             </div>
           </section>
 
-          {!meeting ? (
+          {!meeting && !can('meeting:create') ? <Empty description="当前账号没有创建会议权限" /> : !meeting ? (
             <section className="intake-grid">
               <article className="upload-panel">
                 <div className="panel-heading"><div><span className="panel-icon"><PlusOutlined /></span><div><h2>创建会议任务</h2><p>上传录音，建立新的智能处理任务</p></div></div><Tag>单文件上传</Tag></div>
@@ -421,10 +442,10 @@ export default function App() {
               <div className="workspace-toolbar">
                 <div><strong>内容处理区</strong><span>请按任务进度完成处理与确认</span></div>
                 <div className="actions workspace-actions">
-                  {(meeting.status === 'uploaded' || meeting.status === 'transcription_failed') && <Button type="primary" icon={<AudioOutlined />} onClick={() => run('转写', () => transcribeMeeting(meeting.id))} loading={busy === '转写'}>{meeting.status === 'transcription_failed' ? '重试转写' : '开始转写'}</Button>}
+                  {canManageMeetings && (meeting.status === 'uploaded' || meeting.status === 'transcription_failed') && <Button type="primary" icon={<AudioOutlined />} onClick={() => run('转写', () => transcribeMeeting(meeting.id))} loading={busy === '转写'}>{meeting.status === 'transcription_failed' ? '重试转写' : '开始转写'}</Button>}
                   {(meeting.status === 'queued' || meeting.status === 'transcribing') && <Tag color="processing">{meeting.status === 'queued' ? '后台排队中' : '后台转写中'}</Tag>}
-                  {meeting.status === 'transcribed' && <Button type="primary" icon={<RobotOutlined />} onClick={() => run('生成纪要', () => generateMinutes(meeting.id))} loading={busy === '生成纪要'}>生成纪要</Button>}
-                  {draft && <Button className="save-action" type="primary" icon={<EditOutlined />} onClick={handleSave} loading={busy === '保存定稿'}><span>保存定稿<small>同步当前修改</small></span></Button>}
+                  {canManageMeetings && meeting.status === 'transcribed' && <Button type="primary" icon={<RobotOutlined />} onClick={() => run('生成纪要', () => generateMinutes(meeting.id))} loading={busy === '生成纪要'}>生成纪要</Button>}
+                  {canManageMeetings && draft && <Button className="save-action" type="primary" icon={<EditOutlined />} onClick={handleSave} loading={busy === '保存定稿'}><span>保存定稿<small>同步当前修改</small></span></Button>}
                 </div>
               </div>
               <div className="editor-grid">
