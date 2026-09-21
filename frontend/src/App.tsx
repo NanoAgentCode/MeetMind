@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   AppstoreOutlined, AudioOutlined, BellOutlined, CheckCircleFilled, CloudServerOutlined,
   DeleteOutlined, EditOutlined, FileMarkdownOutlined, FileTextOutlined, FileWordOutlined, FolderOpenOutlined, LoadingOutlined,
-  MenuFoldOutlined, MoreOutlined, PlusOutlined, RobotOutlined, SafetyCertificateOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, PlusOutlined, RobotOutlined, SafetyCertificateOutlined,
   SearchOutlined, SettingOutlined, TeamOutlined, UploadOutlined,
 } from '@ant-design/icons'
 import { Button, Empty, Input, Modal, Select, Spin, Table, Tag, Upload, message } from 'antd'
@@ -107,6 +107,7 @@ function RecordsPage({
 }
 
 export default function App() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [page, setPage] = useState<'workspace' | 'records'>('workspace')
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [title, setTitle] = useState('')
@@ -210,7 +211,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
         <div className="brand"><span className="brand-symbol">会</span><div><strong>会智录</strong><small>MEETMIND</small></div></div>
         <nav className="main-nav" aria-label="主导航">
@@ -233,7 +234,18 @@ export default function App() {
 
       <div className="main-column">
         <header className="topbar">
-          <div className="topbar-title"><MenuFoldOutlined /><span>智能会议工作台</span></div>
+          <div className="topbar-title">
+            <button
+              className="sidebar-toggle"
+              type="button"
+              aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+              aria-expanded={!sidebarCollapsed}
+              onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            >
+              {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            </button>
+            <span>智能会议工作台</span>
+          </div>
           <div className="topbar-actions"><span className="environment"><i />企业专属环境</span><button aria-label="通知" type="button"><BellOutlined /><b>2</b></button></div>
         </header>
 

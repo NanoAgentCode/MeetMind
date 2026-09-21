@@ -15,7 +15,7 @@
 
 后端配置在 `backend/app/config.py` 中按 `app`、`asr`、`llm`、各模型 Provider、`database` 和 `rustfs` 分组；环境变量名称保持扁平格式，兼容 `.env` 与容器部署。
 RustFS 存储桶不存在时，后端会在首次读写对象前自动创建；权限错误等非“不存在”异常不会被忽略。
-会议标题、处理状态、转写内容和结构化纪要存储在 SQLite，默认文件为 `backend/data/meetmind.db`。会议记录页面支持查看、搜索、状态筛选、继续处理和删除。
+会议标题、处理状态、转写内容和结构化纪要存储在 SQLite，默认文件为 `backend/data/meetmind.db`。会议记录页面支持查看、搜索、状态筛选、继续处理和删除；桌面端侧边栏可通过顶部按钮收起或展开。
 
 ## 快速启动
 
@@ -111,6 +111,7 @@ npm run dev
 uv run python -m pytest backend -q
 
 cd frontend
+npm test
 npm run build
 ```
 
