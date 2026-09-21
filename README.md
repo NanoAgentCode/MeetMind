@@ -54,6 +54,10 @@ uv run python backend\main.py
 
 `backend/main.py` 是后端启动入口；`backend/app/main.py` 只负责 FastAPI 应用和路由定义。需要热更新时可使用 `uv run uvicorn backend.app.main:app --reload`。
 
+代码按职责组织：后端访问控制请求模型和权限规则在 `backend/app/access.py`，供应商模型目录请求在 `backend/app/provider_catalog.py`；前端请求按认证、权限管理、会议和模型拆在 `frontend/src/api/`，`frontend/src/api.ts` 保留统一导出入口，会议记录视图位于 `frontend/src/RecordsPage.tsx`。修改时请保持现有 API 路径与响应结构兼容。
+
+本地验证可在项目根目录运行 `uv run python -m pytest backend -q`，在 `frontend` 目录运行 `npm run lint`、`npm test` 和 `npm run build`。
+
 如果复制项目后出现 `VIRTUAL_ENV ... does not match`，请重启终端，或在 PowerShell 中执行：
 
 ```powershell

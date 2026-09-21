@@ -10,12 +10,16 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, Response as Fas
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from .config import settings
+from .access import (
+    DepartmentInput, LoginInput, RoleInput, UserCreateInput, UserUpdateInput,
+    has_permission, require_permission, required_route_permissions,
+)
 from .auth import ADMIN_ROLE_ID, MEMBER_ROLE_ID, PERMISSIONS, auth_store
+from .config import settings
 from .exporter import docx_bytes, markdown
 from .model_registry import model_registry
 from .models import ChatRequest, ChatResponse, Meeting, MeetingAnswer, MeetingQuestion, Minutes, ModelConfig, ModelConfigInput, Provider, ProviderInput
-from pydantic import BaseModel, Field
+from .provider_catalog import fetch_provider_models
 from .services import answer_chat, answer_meeting_question, create_minutes, transcribe_audio
 from .store import store
 
@@ -41,69 +45,6 @@ app.add_middleware(
 )
 
 ALLOWED_SUFFIXES = {".mp3", ".wav", ".m4a", ".webm", ".mp4", ".mpeg", ".ogg"}
-
-
-class LoginInput(BaseModel):
-    username: str
-    password: str
-
-
-class UserCreateInput(BaseModel):
-    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
-    display_name: str = Field(min_length=1, max_length=100)
-    password: str = Field(min_length=8, max_length=256)
-    department_id: str | None = None
-    role_ids: list[str] = Field(default_factory=lambda: [MEMBER_ROLE_ID])
-
-
-class UserUpdateInput(BaseModel):
-    display_name: str = Field(min_length=1, max_length=100)
-    department_id: str | None = None
-    is_active: bool = True
-    role_ids: list[str] = Field(min_length=1)
-    password: str | None = Field(default=None, min_length=8, max_length=256)
-
-
-class RoleInput(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    description: str = Field(default="", max_length=300)
-    permissions: list[str] = Field(default_factory=list)
-
-
-class DepartmentInput(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    parent_id: str | None = None
-    sort_order: int = 0
-
-
-def has_permission(user: dict, permission: str) -> bool:
-    return permission in user.get("permissions", [])
-
-
-def require_permission(user: dict, *permissions: str):
-    if not any(has_permission(user, permission) for permission in permissions):
-        raise HTTPException(403, "权限不足")
-
-
-def required_route_permissions(path: str, method: str) -> tuple[str, ...]:
-    if path.startswith("/api/users"):
-        return ("user:read", "user:manage") if method == "GET" else ("user:manage",)
-    if path.startswith("/api/roles"):
-        return ("role:read", "role:manage", "user:manage") if method == "GET" else ("role:manage",)
-    if path.startswith("/api/departments"):
-        return ("department:read", "department:manage", "user:manage") if method == "GET" else ("department:manage",)
-    if path.startswith(("/api/model-providers", "/api/model-configs")):
-        return ("model:read", "model:manage") if method == "GET" else ("model:manage",)
-    if path == "/api/chat" or path.endswith("/questions"):
-        return ("chat:use",)
-    if path == "/api/meetings" and method == "POST":
-        return ("meeting:create",)
-    if path.startswith("/api/meetings"):
-        if method == "GET":
-            return ("meeting:read_own", "meeting:read_department", "meeting:read_all",
-                    "meeting:manage_own", "meeting:manage_department", "meeting:manage_all")
-        return ("meeting:manage_own", "meeting:manage_department", "meeting:manage_all")
-    return ()
 
 
 @app.middleware("http")
@@ -376,35 +317,7 @@ def delete_model_provider(provider_id: str):
 
 
 async def _fetch_provider_models(provider_id: str) -> list[str]:
-    credentials = model_registry.get_provider_credentials(provider_id)
-    if not credentials:
-        raise HTTPException(404, "供应商不存在")
-    provider, api_key = credentials
-    if not provider.enabled:
-        raise HTTPException(409, "请先启用供应商")
-    if provider.protocol in {"openai", "openai_compatible"}:
-        url = f"{provider.base_url.rstrip('/')}/models"
-        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-    elif provider.protocol == "anthropic":
-        base_url = provider.base_url.rstrip("/")
-        url = f"{base_url}/models" if base_url.endswith("/v1") else f"{base_url}/v1/models"
-        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
-    else:
-        url = f"{provider.base_url.rstrip('/')}/api/tags"
-        headers = {}
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.get(url, headers=headers)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise HTTPException(502, f"获取模型列表失败：{exc}") from exc
-    payload = response.json()
-    if provider.protocol == "ollama":
-        items = payload.get("models", [])
-        model_ids = [item.get("name") or item.get("model") for item in items]
-    else:
-        model_ids = [item.get("id") for item in payload.get("data", [])]
-    return sorted({model_id for model_id in model_ids if isinstance(model_id, str) and model_id.strip()})
+    return await fetch_provider_models(provider_id, model_registry, httpx.AsyncClient)
 
 
 @app.get("/api/model-providers/{provider_id}/models")
