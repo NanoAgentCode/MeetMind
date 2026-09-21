@@ -51,6 +51,11 @@ describe('model management navigation', () => {
     expect(await screen.findByRole('heading', { name: '模型服务', level: 1 })).toBeInTheDocument()
     expect(screen.getByText('会议 RAG')).toBeInTheDocument()
     expect(screen.getByText('基于单场会议内容进行问答')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '获取模型列表' })).toHaveTextContent('模型')
+    expect(screen.getByRole('button', { name: '测试供应商连接' })).toHaveTextContent('测试')
+    expect(screen.getByRole('button', { name: '编辑供应商' })).toHaveTextContent('编辑')
+    expect(screen.getByRole('button', { name: '删除供应商' })).toHaveTextContent('删除')
+    expect(document.querySelectorAll('.provider-card .action-label')).toHaveLength(4)
   })
 
   it('loads provider models instead of accepting a manual model id', async () => {

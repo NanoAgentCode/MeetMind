@@ -196,7 +196,8 @@ button, input, textarea { font-family: inherit; }
 .provider-secret span { color: #98a2b3; font-size: 8px; font-weight: 600; letter-spacing: .08em; }
 .provider-secret code { color: #475467; font-size: 10px; }
 .card-actions { display: flex; justify-content: flex-end; gap: 4px; }
-.provider-card .card-actions { margin-top: 12px; }
+.provider-card .card-actions { margin-top: 12px; gap: 6px; }
+.provider-card .card-actions .ant-btn { min-width: 0; padding-inline: 8px; flex: 1; }
 .model-list { padding-top: 8px; }
 .model-list > article { min-height: 72px; padding: 12px 4px; display: grid; grid-template-columns: 42px minmax(160px, 1.5fr) minmax(120px, 1fr) 105px 65px 76px; align-items: center; gap: 14px; border-bottom: 1px solid #f2f4f7; }
 .model-list > article:last-child { border-bottom: 0; }
@@ -293,4 +294,7 @@ button, input, textarea { font-family: inherit; }
   .records-toolbar, .records-toolbar > div { align-items: stretch; flex-direction: column; }
   .records-toolbar .ant-input-affix-wrapper, .records-toolbar .ant-select { width: 100%; }
   .qa-input { align-items: stretch; flex-direction: column; }
+  .provider-card .card-actions { justify-content: flex-end; }
+  .provider-card .card-actions .ant-btn { width: 40px; flex: 0 0 40px; padding-inline: 0; }
+  .provider-card .card-actions .action-label { display: none; }
 }
