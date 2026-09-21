@@ -114,11 +114,11 @@ button, input, textarea { font-family: inherit; }
 .save-action.ant-btn > span:last-child { color: #fff !important; font-size: 14px; font-weight: 700; }
 .save-action.ant-btn .anticon { color: #fff !important; font-size: 16px; }
 .save-action.ant-btn small { margin-top: 4px; color: #d6e4ff !important; font-size: 9px; font-weight: 500; }
-.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; align-items: start; }
-.document-panel { min-width: 0; min-height: 560px; }
+.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; align-items: stretch; }
+.document-panel { display: flex; flex-direction: column; min-width: 0; min-height: 560px; }
 .document-head { min-height: 70px; }
 .document-icon.ai { color: #6941c6; background: #f4f3ff; }
-.document-body { min-height: 470px; padding: 24px; }
+.document-body { flex: 1; min-height: 470px; padding: 24px; }
 .transcript { max-height: 620px; overflow: auto; padding-right: 8px; white-space: pre-wrap; color: #475467; font-size: 13px; line-height: 1.9; }
 .processing { min-height: 380px; display: grid; place-content: center; text-align: center; color: var(--blue); font-size: 25px; }
 .processing p { margin-top: 12px; color: var(--muted); font-size: 11px; }
