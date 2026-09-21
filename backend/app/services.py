@@ -8,7 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .config import settings
 from .model_registry import ModelRegistry, model_registry
-from .models import Meeting, Minutes
+from .models import ChatTurn, Meeting, Minutes
 from .providers import build_chat_model, build_managed_chat_model
 
 
@@ -116,20 +116,43 @@ async def create_minutes(title: str, transcript: str) -> Minutes:
 async def answer_meeting_question(
     meeting: Meeting, question: str, registry: ModelRegistry = model_registry
 ) -> str:
-    managed = registry.get_default_model("rag") or registry.get_default_model("llm")
-    model = build_managed_chat_model(*managed) if managed else build_chat_model()
-    context = meeting.transcript
-    if meeting.minutes:
-        context += f"\n结构化纪要：{meeting.minutes.model_dump_json()}"
-    if not context.strip():
-        raise ValueError("该会议尚无可用于问答的转写或纪要")
-    if model is None:
-        return "当前使用演示模型，会议问答需要先在模型服务中配置并启用默认的会议 RAG 或 LLM 模型。"
-    response = await model.ainvoke(
-        "你是会议内容问答助手。只能根据给定会议内容回答；若内容中没有答案，明确回答“会议内容中未提及”，"
-        "不得补充外部知识或编造。\n"
-        f"会议内容：\n{context}\n\n用户问题：{question}"
+    return await answer_chat(question, [], meeting, registry)
+
+
+async def answer_chat(
+    question: str,
+    history: list[ChatTurn],
+    meeting: Meeting | None = None,
+    registry: ModelRegistry = model_registry,
+) -> str:
+    managed = (
+        registry.get_default_model("rag") or registry.get_default_model("llm")
+        if meeting else registry.get_default_model("llm")
     )
+    model = build_managed_chat_model(*managed) if managed else build_chat_model()
+    if model is None:
+        mode = "会议 RAG 或 LLM" if meeting else "LLM"
+        return f"当前使用演示模型，请先在模型服务中配置并启用默认的{mode}模型。"
+    history_text = "\n".join(
+        f"{'用户' if turn.role == 'user' else '助手'}：{turn.content}" for turn in history[-10:]
+    )
+    if meeting:
+        context = meeting.transcript
+        if meeting.minutes:
+            context += f"\n结构化纪要：{meeting.minutes.model_dump_json()}"
+        if not context.strip():
+            raise ValueError("该会议尚无可用于问答的转写或纪要")
+        instruction = (
+            "你是会议内容问答助手。只能根据给定会议内容回答；若内容中没有答案，明确回答“会议内容中未提及”，"
+            "不得补充外部知识或编造。\n"
+            f"会议名称：{meeting.title}\n会议内容：\n{context}"
+        )
+    else:
+        instruction = "你是专业、简洁的中文 AI 助手，请直接回答用户问题。"
+    prompt = f"{instruction}\n"
+    if history_text:
+        prompt += f"\n最近对话：\n{history_text}\n"
+    response = await model.ainvoke(f"{prompt}\n用户问题：{question}")
     content = response.content
     if isinstance(content, str):
         return content.strip()

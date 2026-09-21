@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   AppstoreOutlined, AudioOutlined, BellOutlined, CheckCircleFilled, CloudServerOutlined,
   DeleteOutlined, EditOutlined, FileMarkdownOutlined, FileTextOutlined, FileWordOutlined, FolderOpenOutlined, LoadingOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, PlusOutlined, RobotOutlined, SafetyCertificateOutlined,
-  SearchOutlined, SendOutlined, SettingOutlined, TeamOutlined, UploadOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined, MessageOutlined, MoreOutlined, PlusOutlined, RobotOutlined, SafetyCertificateOutlined,
+  SearchOutlined, SettingOutlined, TeamOutlined, UploadOutlined,
 } from '@ant-design/icons'
 import { Button, Empty, Input, Modal, Select, Spin, Table, Tag, Upload, message } from 'antd'
 import type { UploadFile } from 'antd'
-import { askMeeting, deleteMeeting, exportUrl, generateMinutes, listMeetings, saveMinutes, transcribeMeeting, uploadRecording } from './api'
+import { deleteMeeting, exportUrl, generateMinutes, listMeetings, saveMinutes, transcribeMeeting, uploadRecording } from './api'
 import type { Meeting, Minutes } from './types'
+import MeetingChat from './MeetingChat'
 import ModelManagement from './ModelManagement'
 
 const { TextArea } = Input
@@ -21,6 +22,7 @@ const phases = [
 const navigation = [
   { key: 'workspace', label: '工作台', icon: AppstoreOutlined },
   { key: 'records', label: '会议记录', icon: FolderOpenOutlined },
+  { key: 'chat', label: '会议问答', icon: MessageOutlined },
   { key: 'templates', label: '纪要模板', icon: FileTextOutlined },
   { key: 'team', label: '团队空间', icon: TeamOutlined },
 ]
@@ -109,7 +111,7 @@ function RecordsPage({
 
 export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [page, setPage] = useState<'workspace' | 'records' | 'models'>('workspace')
+  const [page, setPage] = useState<'workspace' | 'records' | 'chat' | 'models'>('workspace')
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [title, setTitle] = useState('')
   const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -120,9 +122,6 @@ export default function App() {
   const [recordsLoaded, setRecordsLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState('')
-  const [asking, setAsking] = useState(false)
   const current = meeting ? rank[meeting.status] : -1
   const filename = useMemo(() => fileList[0]?.name || '', [fileList])
   const visibleRecords = useMemo(() => records.filter((item) => {
@@ -153,8 +152,6 @@ export default function App() {
       setTitle('')
       setFileList([])
     }
-    setQuestion('')
-    setAnswer('')
     setPage('workspace')
   }
 
@@ -216,20 +213,6 @@ export default function App() {
     setDraft({ ...draft, [field]: field === 'title' || field === 'summary' ? value : lines(value) })
   }
 
-  async function handleQuestion() {
-    if (!meeting || !question.trim()) return
-    setAsking(true)
-    setAnswer('')
-    try {
-      setAnswer(await askMeeting(meeting.id, question.trim()))
-    } catch (error) {
-      const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
-      message.error(detail || '会议问答失败，请检查 RAG 模型配置')
-    } finally {
-      setAsking(false)
-    }
-  }
-
   return (
     <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
@@ -238,8 +221,8 @@ export default function App() {
           <p>协作空间</p>
           {navigation.map(({ key, label, icon: Icon }) => {
             const active = page === key
-            const available = key === 'workspace' || key === 'records'
-            return <button className={active ? 'active' : ''} key={key} type="button" disabled={!available} title={available ? label : `${label}（即将开放）`} onClick={() => available && (key === 'workspace' ? openWorkspace(meeting || undefined) : setPage('records'))}><Icon /><span className="nav-label">{label}</span>{active && <i />}</button>
+            const available = key === 'workspace' || key === 'records' || key === 'chat'
+            return <button className={active ? 'active' : ''} key={key} type="button" disabled={!available} title={available ? label : `${label}（即将开放）`} onClick={() => available && (key === 'workspace' ? openWorkspace(meeting || undefined) : setPage(key as 'records' | 'chat'))}><Icon /><span className="nav-label">{label}</span>{active && <i />}</button>
           })}
           <p>系统管理</p>
           <button className={page === 'models' ? 'active' : ''} type="button" onClick={() => setPage('models')}><CloudServerOutlined /><span className="nav-label">模型服务</span>{page === 'models' && <i />}</button>
@@ -270,7 +253,7 @@ export default function App() {
         </header>
 
         <main className="content">
-          {page === 'models' ? <ModelManagement /> : page === 'records' ? <RecordsPage
+          {page === 'models' ? <ModelManagement /> : page === 'chat' ? <MeetingChat /> : page === 'records' ? <RecordsPage
             records={records}
             visibleRecords={visibleRecords}
             loading={recordsLoading}
@@ -348,13 +331,6 @@ export default function App() {
                   </div>
                 </article>
               </div>
-              <section className="meeting-qa">
-                <div className="qa-heading"><span className="document-icon ai"><RobotOutlined /></span><div><h3>会议内容问答</h3><p>答案仅基于当前会议的转写与纪要</p></div><Tag color="purple">RAG</Tag></div>
-                <div className="qa-body">
-                  {answer && <div className="qa-answer"><span>AI</span><p>{answer}</p></div>}
-                  <div className="qa-input"><Input value={question} placeholder="例如：会议决定什么时候发布？" onChange={(event) => setQuestion(event.target.value)} onPressEnter={handleQuestion} /><Button type="primary" icon={<SendOutlined />} loading={asking} disabled={!question.trim()} onClick={handleQuestion}>提问</Button></div>
-                </div>
-              </section>
             </section>
           )}
           </>}

@@ -13,9 +13,9 @@ class ResizeObserverMock {
 vi.stubGlobal('ResizeObserver', ResizeObserverMock)
 
 vi.mock('./api', () => ({
-  askMeeting: vi.fn(), createModelConfig: vi.fn(), createModelProvider: vi.fn(), deleteMeeting: vi.fn(),
+  askMeeting: vi.fn(), chat: vi.fn().mockResolvedValue('测试回答'), createModelConfig: vi.fn(), createModelProvider: vi.fn(), deleteMeeting: vi.fn(),
   deleteModelConfig: vi.fn(), deleteModelProvider: vi.fn(), exportUrl: vi.fn(), generateMinutes: vi.fn(),
-  listMeetings: vi.fn().mockResolvedValue([]), listModelConfigs: vi.fn().mockResolvedValue([]), listProviderModels: vi.fn().mockResolvedValue(['gpt-4o-mini', 'qwen3']),
+  listMeetings: vi.fn().mockResolvedValue([{ id: 'meeting-1', filename: 'weekly.mp3', title: '产品周会', created_at: '2026-09-21T00:00:00Z', status: 'transcribed', transcript: '周五发布', minutes: null }]), listModelConfigs: vi.fn().mockResolvedValue([]), listProviderModels: vi.fn().mockResolvedValue(['gpt-4o-mini', 'qwen3']),
   listModelProviders: vi.fn().mockResolvedValue([{ id: 'provider-1', name: '企业模型', protocol: 'openai_compatible', base_url: 'https://llm.example.com/v1', enabled: true, api_key_configured: true, api_key_masked: 'sk-••••test', created_at: '2026-09-21T00:00:00Z' }]), saveMinutes: vi.fn(), transcribeMeeting: vi.fn(),
   testModelProvider: vi.fn(), updateModelConfig: vi.fn(), updateModelProvider: vi.fn(), uploadRecording: vi.fn(),
 }))
@@ -34,8 +34,8 @@ describe('sidebar collapse control', () => {
     fireEvent.click(collapseButton)
     expect(layout).toHaveClass('sidebar-collapsed')
     expect(screen.getByRole('button', { name: '展开侧边栏' })).toHaveAttribute('aria-expanded', 'false')
-    expect(container.querySelectorAll('.sidebar-collapsed .main-nav .anticon')).toHaveLength(7)
-    expect(container.querySelectorAll('.sidebar-collapsed .main-nav .nav-label')).toHaveLength(7)
+    expect(container.querySelectorAll('.sidebar-collapsed .main-nav .anticon')).toHaveLength(8)
+    expect(container.querySelectorAll('.sidebar-collapsed .main-nav .nav-label')).toHaveLength(8)
 
     fireEvent.click(screen.getByRole('button', { name: '展开侧边栏' }))
     expect(layout).not.toHaveClass('sidebar-collapsed')
@@ -67,5 +67,21 @@ describe('model management navigation', () => {
     fireEvent.mouseDown(screen.getAllByRole('combobox')[2])
     expect((await screen.findAllByText('gpt-4o-mini')).length).toBeGreaterThan(0)
     expect(screen.queryByPlaceholderText('例如：gpt-4o-mini')).not.toBeInTheDocument()
+  })
+})
+
+describe('meeting chat navigation', () => {
+  it('supports regular chat and selecting a meeting with @', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /会议问答/ }))
+
+    expect(await screen.findByRole('heading', { name: '会议问答', level: 1 })).toBeInTheDocument()
+    expect(screen.getByText('普通问答')).toBeInTheDocument()
+    const input = screen.getByPlaceholderText('输入问题，使用 @ 选择会议…')
+    fireEvent.change(input, { target: { value: '@产品' } })
+    fireEvent.click(await screen.findByRole('button', { name: /产品周会/ }))
+
+    expect(screen.getByText('会议 RAG')).toBeInTheDocument()
+    expect(screen.getByText('仅依据本次会议内容回答', { exact: false })).toBeInTheDocument()
   })
 })

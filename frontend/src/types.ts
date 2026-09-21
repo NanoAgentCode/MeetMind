@@ -59,3 +59,8 @@ export interface ModelConfigInput {
   enabled: boolean
   is_default: boolean
 }
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}

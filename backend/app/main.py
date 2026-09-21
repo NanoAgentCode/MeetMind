@@ -11,8 +11,8 @@ from fastapi.responses import Response
 from .config import settings
 from .exporter import docx_bytes, markdown
 from .model_registry import model_registry
-from .models import Meeting, MeetingAnswer, MeetingQuestion, Minutes, ModelConfig, ModelConfigInput, Provider, ProviderInput
-from .services import answer_meeting_question, create_minutes, transcribe_audio
+from .models import ChatRequest, ChatResponse, Meeting, MeetingAnswer, MeetingQuestion, Minutes, ModelConfig, ModelConfigInput, Provider, ProviderInput
+from .services import answer_chat, answer_meeting_question, create_minutes, transcribe_audio
 from .store import store
 
 app = FastAPI(title="会智录 API", version="0.1.0")
@@ -206,6 +206,16 @@ async def ask_meeting(meeting_id: str, data: MeetingQuestion):
         return MeetingAnswer(answer=await answer_meeting_question(meeting, data.question, model_registry))
     except (ValueError, httpx.HTTPError) as exc:
         raise HTTPException(502, f"会议问答失败：{exc}") from exc
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(data: ChatRequest):
+    meeting = require_meeting(data.meeting_id) if data.meeting_id else None
+    try:
+        answer = await answer_chat(data.question, data.history, meeting, model_registry)
+        return ChatResponse(answer=answer, meeting_id=data.meeting_id)
+    except (ValueError, httpx.HTTPError) as exc:
+        raise HTTPException(502, f"对话失败：{exc}") from exc
 
 
 @app.post("/api/meetings/{meeting_id}/minutes/generate", response_model=Meeting)

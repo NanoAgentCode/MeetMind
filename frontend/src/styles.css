@@ -215,17 +215,44 @@ button, input, textarea { font-family: inherit; }
 .config-form .switch-field { padding: 12px 0 0; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #f2f4f7; }
 .config-form .switch-field > span:first-child { display: grid; }
 .config-form .switch-field small { margin: 3px 0 0; }
-.meeting-qa { margin-top: 18px; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 3px rgba(16,24,40,.04); }
-.qa-heading { min-height: 68px; padding: 14px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
-.qa-heading > div { display: grid; flex: 1; }
-.qa-heading h3 { margin: 0; color: #101828; font-size: 14px; }
-.qa-heading p { margin: 3px 0 0; color: #98a2b3; font-size: 10px; }
-.qa-body { padding: 18px 20px; }
-.qa-answer { margin-bottom: 14px; padding: 14px; display: flex; align-items: flex-start; gap: 10px; border: 1px solid #e9d7fe; border-radius: 8px; background: #fafaff; }
-.qa-answer > span { width: 28px; height: 28px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 7px; color: #fff; background: #7f56d9; font: 600 9px 'IBM Plex Sans'; }
-.qa-answer p { margin: 3px 0 0; color: #475467; font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
-.qa-input { display: flex; gap: 10px; }
-.qa-input .ant-btn { min-width: 92px; }
+.chat-page { max-width: 1120px; margin: 0 auto; }
+.chat-page-heading { align-items: center; margin-bottom: 18px; }
+.chat-shell { min-height: calc(100vh - 210px); overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(16,24,40,.04); }
+.chat-context { min-height: 72px; padding: 14px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); background: #fcfcfd; }
+.chat-context-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 9px; color: #155eef; background: #eff4ff; font-size: 17px; }
+.chat-context-icon.rag { color: #6938ef; background: #f4f3ff; }
+.chat-context > div:nth-child(2) { min-width: 0; flex: 1; display: grid; }
+.chat-context strong { color: #182230; font-size: 13px; }
+.chat-context span { margin-top: 3px; overflow: hidden; color: #98a2b3; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.chat-messages { min-height: 380px; max-height: calc(100vh - 390px); padding: 28px 34px; overflow-y: auto; background: linear-gradient(180deg, #fff 0%, #fcfdff 100%); }
+.chat-empty { min-height: 330px; display: grid; place-items: center; align-content: center; text-align: center; }
+.chat-empty > span { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 14px; color: #155eef; background: #eff4ff; font-size: 22px; box-shadow: inset 0 0 0 1px #d1e0ff; }
+.chat-empty h2 { margin: 18px 0 7px; color: #182230; font-size: 18px; }
+.chat-empty p { max-width: 420px; margin: 0; color: #98a2b3; font-size: 11px; line-height: 1.7; }
+.chat-message { margin: 0 0 18px; display: flex; align-items: flex-start; gap: 11px; }
+.chat-message > span { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; color: #fff; background: #7f56d9; font: 600 9px 'IBM Plex Sans'; }
+.chat-message.user { justify-content: flex-start; flex-direction: row-reverse; }
+.chat-message.user > span { background: #344054; }
+.chat-message p { max-width: min(720px, 78%); margin: 0; padding: 11px 14px; border: 1px solid #e9d7fe; border-radius: 4px 12px 12px; color: #344054; background: #fafaff; font-size: 12px; line-height: 1.75; white-space: pre-wrap; }
+.chat-message.user p { border-color: #d1e0ff; border-radius: 12px 4px 12px 12px; background: #eff4ff; }
+.chat-composer { position: relative; padding: 14px 20px 12px; border-top: 1px solid var(--line); background: #fff; }
+.selected-meeting-chip { width: fit-content; max-width: 100%; margin-bottom: 8px; padding: 5px 7px 5px 9px; display: flex; align-items: center; gap: 6px; border: 1px solid #d6bbfb; border-radius: 6px; color: #6941c6; background: #f9f5ff; font-size: 10px; }
+.selected-meeting-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selected-meeting-chip button { padding: 2px; border: 0; display: grid; place-items: center; color: #7f56d9; background: transparent; cursor: pointer; }
+.composer-input { padding: 7px 8px 7px 14px; display: flex; align-items: flex-end; gap: 10px; border: 1px solid #b2ccff; border-radius: 10px; box-shadow: 0 0 0 3px #eff4ff; }
+.composer-input textarea { padding: 6px 0 !important; border: 0 !important; box-shadow: none !important; resize: none !important; }
+.composer-input .ant-btn { flex: 0 0 auto; }
+.composer-hint { display: block; margin-top: 9px; color: #98a2b3; font-size: 9px; text-align: center; }
+.meeting-mention-popover { position: absolute; right: 20px; bottom: calc(100% - 6px); left: 20px; z-index: 20; max-height: 330px; overflow: auto; padding: 8px; border: 1px solid #d0d5dd; border-radius: 10px; background: #fff; box-shadow: 0 14px 35px rgba(16,24,40,.16); }
+.mention-title { padding: 8px 9px 10px; display: flex; justify-content: space-between; color: #344054; font-size: 11px; font-weight: 600; }
+.mention-title small { color: #98a2b3; font-weight: 400; }
+.meeting-mention-popover button { width: 100%; padding: 9px; border: 0; border-radius: 7px; display: flex; align-items: center; gap: 10px; color: #344054; background: transparent; text-align: left; cursor: pointer; }
+.meeting-mention-popover button:hover { background: #f5f8ff; }
+.meeting-mention-popover button > span:first-child { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 7px; color: #155eef; background: #eff4ff; }
+.meeting-mention-popover button > div { min-width: 0; flex: 1; display: grid; }
+.meeting-mention-popover button strong, .meeting-mention-popover button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meeting-mention-popover button strong { font-size: 11px; }
+.meeting-mention-popover button small { margin-top: 3px; color: #98a2b3; font-size: 9px; }
 .provider-model-catalog { max-height: 420px; overflow: auto; display: grid; gap: 7px; }
 .provider-model-catalog > div { min-height: 42px; padding: 9px 12px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 7px; background: #fcfcfd; }
 .provider-model-catalog > div .anticon { color: #6941c6; }
@@ -293,7 +320,9 @@ button, input, textarea { font-family: inherit; }
   .record-stats { grid-template-columns: 1fr; }
   .records-toolbar, .records-toolbar > div { align-items: stretch; flex-direction: column; }
   .records-toolbar .ant-input-affix-wrapper, .records-toolbar .ant-select { width: 100%; }
-  .qa-input { align-items: stretch; flex-direction: column; }
+  .chat-messages { padding: 22px 16px; }
+  .chat-context, .chat-composer { padding-right: 14px; padding-left: 14px; }
+  .meeting-mention-popover { right: 14px; left: 14px; }
   .provider-card .card-actions { justify-content: flex-end; }
   .provider-card .card-actions .ant-btn { width: 40px; flex: 0 0 40px; padding-inline: 0; }
   .provider-card .card-actions .action-label { display: none; }

@@ -110,6 +110,39 @@ def test_meeting_question_uses_meeting_context(monkeypatch, tmp_path):
     assert response.json() == {"answer": "张明负责上线。"}
 
 
+@pytest.mark.parametrize("meeting_id", [None, "meeting-1"])
+def test_unified_chat_supports_regular_and_meeting_modes(monkeypatch, tmp_path, meeting_id):
+    meeting_store = MeetingStore(MemoryObjectStorage(), tmp_path / "chat-meetings.db")
+    registry = ModelRegistry(tmp_path / "chat-models.db")
+    monkeypatch.setattr(main_module, "store", meeting_store)
+    monkeypatch.setattr(main_module, "model_registry", registry)
+    meeting_store.save(
+        Meeting(
+            id="meeting-1", filename="weekly.mp3", title="产品周会",
+            created_at=datetime.now(timezone.utc), status="transcribed", transcript="决定周五发布。",
+        )
+    )
+
+    async def fake_chat(question, history, meeting, passed_registry):
+        assert question == "什么时候发布？"
+        assert history[0].content == "继续刚才的话题"
+        assert (meeting.id if meeting else None) == meeting_id
+        assert passed_registry is registry
+        return "周五发布。" if meeting else "这是普通问答。"
+
+    monkeypatch.setattr(main_module, "answer_chat", fake_chat)
+    response = TestClient(app).post(
+        "/api/chat",
+        json={
+            "question": "什么时候发布？", "meeting_id": meeting_id,
+            "history": [{"role": "user", "content": "继续刚才的话题"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["meeting_id"] == meeting_id
+
+
 @pytest.mark.parametrize(
     "protocol,base_url,payload,expected_url,expected_models",
     [

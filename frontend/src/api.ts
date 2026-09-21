@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { Meeting, Minutes, ModelConfig, ModelConfigInput, ModelProvider, ModelProviderInput } from './types'
+import type { ChatMessage, Meeting, Minutes, ModelConfig, ModelConfigInput, ModelProvider, ModelProviderInput } from './types'
 
 const api = axios.create({ baseURL: '/api', timeout: 120_000 })
 
@@ -36,6 +36,12 @@ export async function deleteMeeting(id: string) {
 
 export async function askMeeting(id: string, question: string) {
   return (await api.post<{ answer: string }>(`/meetings/${id}/questions`, { question })).data.answer
+}
+
+export async function chat(question: string, history: ChatMessage[], meetingId?: string) {
+  return (await api.post<{ answer: string }>('/chat', {
+    question, history, meeting_id: meetingId || null,
+  })).data.answer
 }
 
 export async function listModelProviders() {
