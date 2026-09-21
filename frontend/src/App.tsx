@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   AppstoreOutlined, AudioOutlined, BellOutlined, CheckCircleFilled, CloudServerOutlined,
-  DeleteOutlined, EditOutlined, FileMarkdownOutlined, FileTextOutlined, FileWordOutlined, FolderOpenOutlined, LoadingOutlined,
+  DeleteOutlined, EditOutlined, FileTextOutlined, FolderOpenOutlined, LoadingOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, MessageOutlined, MoreOutlined, PlusOutlined, RobotOutlined, SafetyCertificateOutlined,
   SearchOutlined, SettingOutlined, TeamOutlined, UploadOutlined,
 } from '@ant-design/icons'
 import { Button, Empty, Input, Modal, Select, Spin, Table, Tag, Upload, message } from 'antd'
 import type { UploadFile } from 'antd'
-import { deleteMeeting, exportUrl, generateMinutes, listMeetings, saveMinutes, transcribeMeeting, uploadRecording } from './api'
+import { deleteMeeting, generateMinutes, listMeetings, saveMinutes, transcribeMeeting, uploadRecording } from './api'
 import type { Meeting, Minutes } from './types'
 import MeetingChat from './MeetingChat'
 import ModelManagement from './ModelManagement'
@@ -47,7 +47,7 @@ function formatDate(value?: string) {
 
 function RecordsPage({
   records, visibleRecords, loading, query, statusFilter, onQueryChange,
-  onStatusChange, onRefresh, onOpen, onDelete, onCreate,
+  onStatusChange, onRefresh, onOpen, onChat, onDelete, onCreate,
 }: {
   records: Meeting[]
   visibleRecords: Meeting[]
@@ -58,6 +58,7 @@ function RecordsPage({
   onStatusChange: (value: string) => void
   onRefresh: () => void
   onOpen: (meeting: Meeting) => void
+  onChat: (meeting: Meeting) => void
   onDelete: (meeting: Meeting) => void
   onCreate: () => void
 }) {
@@ -81,8 +82,8 @@ function RecordsPage({
       render: (_: unknown, item: Meeting) => <span className="table-secondary">{item.transcript ? `${item.transcript.length} 字转写` : '暂无转写'}{item.minutes ? ' · 已有纪要' : ''}</span>,
     },
     {
-      title: '操作', key: 'actions', width: 150, align: 'right' as const,
-      render: (_: unknown, item: Meeting) => <div className="record-actions"><Button type="link" onClick={() => onOpen(item)}>打开</Button><Button type="text" danger icon={<DeleteOutlined />} aria-label={`删除${item.title}`} onClick={() => onDelete(item)} /></div>,
+      title: '操作', key: 'actions', width: 130, align: 'right' as const,
+      render: (_: unknown, item: Meeting) => <div className="record-actions"><Button size="small" icon={<FolderOpenOutlined />} aria-label={`打开${item.title}`} title="打开会议" onClick={() => onOpen(item)} /><Button size="small" icon={<MessageOutlined />} aria-label={`去对话${item.title}`} title="去对话" onClick={() => onChat(item)} /><Button size="small" danger icon={<DeleteOutlined />} aria-label={`删除${item.title}`} title="删除会议" onClick={() => onDelete(item)} /></div>,
     },
   ]
 
@@ -115,6 +116,7 @@ export default function App() {
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [title, setTitle] = useState('')
   const [meeting, setMeeting] = useState<Meeting | null>(null)
+  const [chatMeeting, setChatMeeting] = useState<Meeting | null>(null)
   const [draft, setDraft] = useState<Minutes | null>(null)
   const [busy, setBusy] = useState('')
   const [records, setRecords] = useState<Meeting[]>([])
@@ -157,6 +159,11 @@ export default function App() {
 
   function openRecord(item: Meeting) {
     openWorkspace(item)
+  }
+
+  function openChat(item?: Meeting) {
+    setChatMeeting(item || null)
+    setPage('chat')
   }
 
   function confirmDelete(item: Meeting) {
@@ -222,7 +229,7 @@ export default function App() {
           {navigation.map(({ key, label, icon: Icon }) => {
             const active = page === key
             const available = key === 'workspace' || key === 'records' || key === 'chat'
-            return <button className={active ? 'active' : ''} key={key} type="button" disabled={!available} title={available ? label : `${label}（即将开放）`} onClick={() => available && (key === 'workspace' ? openWorkspace(meeting || undefined) : setPage(key as 'records' | 'chat'))}><Icon /><span className="nav-label">{label}</span>{active && <i />}</button>
+            return <button className={active ? 'active' : ''} key={key} type="button" disabled={!available} title={available ? label : `${label}（即将开放）`} onClick={() => available && (key === 'workspace' ? openWorkspace(meeting || undefined) : key === 'chat' ? openChat() : setPage('records'))}><Icon /><span className="nav-label">{label}</span>{active && <i />}</button>
           })}
           <p>系统管理</p>
           <button className={page === 'models' ? 'active' : ''} type="button" onClick={() => setPage('models')}><CloudServerOutlined /><span className="nav-label">模型服务</span>{page === 'models' && <i />}</button>
@@ -253,7 +260,7 @@ export default function App() {
         </header>
 
         <main className="content">
-          {page === 'models' ? <ModelManagement /> : page === 'chat' ? <MeetingChat /> : page === 'records' ? <RecordsPage
+          {page === 'models' ? <ModelManagement /> : page === 'chat' ? <MeetingChat initialMeeting={chatMeeting} /> : page === 'records' ? <RecordsPage
             records={records}
             visibleRecords={visibleRecords}
             loading={recordsLoading}
@@ -263,12 +270,13 @@ export default function App() {
             onStatusChange={setStatusFilter}
             onRefresh={loadRecords}
             onOpen={openRecord}
+            onChat={openChat}
             onDelete={confirmDelete}
             onCreate={() => openWorkspace()}
           /> : <>
           <div className="page-heading">
             <div><p className="breadcrumb">工作台&nbsp;&nbsp;/&nbsp;&nbsp;智能纪要</p><h1>{meeting ? meeting.title : '智能会议纪要'}</h1><p>{meeting ? `${meeting.filename} · ${formatDate(meeting.created_at)}` : '从会议录音中快速提炼共识、决策与行动事项'}</p></div>
-            {meeting && <Tag className="meeting-tag" icon={<CheckCircleFilled />}>处理中</Tag>}
+            {meeting && <div className="meeting-heading-actions"><Tag className="meeting-tag" icon={<CheckCircleFilled />}>处理中</Tag><Button icon={<PlusOutlined />} onClick={() => openWorkspace()}>新建会议</Button></div>}
           </div>
 
           <section className="progress-panel" aria-label="处理进度">
@@ -309,7 +317,6 @@ export default function App() {
                 <div className="actions workspace-actions">
                   {meeting.status === 'uploaded' && <Button type="primary" icon={<AudioOutlined />} onClick={() => run('转写', () => transcribeMeeting(meeting.id))} loading={busy === '转写'}>开始转写</Button>}
                   {meeting.status === 'transcribed' && <Button type="primary" icon={<RobotOutlined />} onClick={() => run('生成纪要', () => generateMinutes(meeting.id))} loading={busy === '生成纪要'}>生成纪要</Button>}
-                  {meeting.status === 'edited' && <div className="export-actions"><span className="export-label">文档导出</span><Button className="export-action word" icon={<FileWordOutlined />} href={exportUrl(meeting.id, 'docx')}><span>Word<small>DOCX</small></span></Button><Button className="export-action markdown" icon={<FileMarkdownOutlined />} href={exportUrl(meeting.id, 'md')}><span>Markdown<small>MD</small></span></Button></div>}
                   {draft && <Button className="save-action" type="primary" icon={<EditOutlined />} onClick={handleSave} loading={busy === '保存定稿'}><span>保存定稿<small>同步当前修改</small></span></Button>}
                 </div>
               </div>

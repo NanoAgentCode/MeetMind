@@ -4,9 +4,9 @@ import { Button, Empty, Input, Spin, Tag, message } from 'antd'
 import { chat, listMeetings } from './api'
 import type { ChatMessage, Meeting } from './types'
 
-export default function MeetingChat() {
+export default function MeetingChat({ initialMeeting = null }: { initialMeeting?: Meeting | null }) {
   const [meetings, setMeetings] = useState<Meeting[]>([])
-  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null)
+  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(initialMeeting)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)

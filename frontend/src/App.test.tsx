@@ -11,6 +11,16 @@ class ResizeObserverMock {
 }
 
 vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addListener: vi.fn(),
+  removeListener: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  dispatchEvent: vi.fn(),
+})))
 
 vi.mock('./api', () => ({
   askMeeting: vi.fn(), chat: vi.fn().mockResolvedValue('测试回答'), createModelConfig: vi.fn(), createModelProvider: vi.fn(), deleteMeeting: vi.fn(),
@@ -83,5 +93,27 @@ describe('meeting chat navigation', () => {
 
     expect(screen.getByText('会议 RAG')).toBeInTheDocument()
     expect(screen.getByText('仅依据本次会议内容回答', { exact: false })).toBeInTheDocument()
+  })
+
+  it('opens chat with the meeting selected from records', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /会议记录/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '去对话产品周会' }))
+
+    expect(await screen.findByRole('heading', { name: '会议问答', level: 1 })).toBeInTheDocument()
+    expect(screen.getByText('会议 RAG')).toBeInTheDocument()
+    expect(screen.getByText('weekly.mp3 · 仅依据本次会议内容回答')).toBeInTheDocument()
+  })
+
+  it('opens a meeting with a new-meeting action and no export actions', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /会议记录/ }))
+    await screen.findByText('weekly.mp3', {}, { timeout: 3000 })
+    fireEvent.click(screen.getByRole('button', { name: '打开产品周会' }))
+
+    const createButton = await screen.findByRole('button', { name: /新建会议/ })
+    expect(screen.queryByText('文档导出')).not.toBeInTheDocument()
+    fireEvent.click(createButton)
+    expect(screen.getByRole('heading', { name: '创建会议任务', level: 2 })).toBeInTheDocument()
   })
 })
