@@ -7,6 +7,12 @@ from backend.app.config import settings
 from backend.app.main import app
 from backend.app.store import MeetingStore
 import backend.app.main as main_module
+import backend.app.services as services_module
+
+
+class EmptyModelRegistry:
+    def get_default_model(self, _model_type):
+        return None
 
 
 class MemoryObjectStorage:
@@ -32,6 +38,7 @@ def test_complete_meeting_flow(monkeypatch, tmp_path):
     object_storage = MemoryObjectStorage()
     test_store = MeetingStore(object_storage, tmp_path / "meetings.db")
     monkeypatch.setattr(main_module, "store", test_store)
+    monkeypatch.setattr(services_module, "model_registry", EmptyModelRegistry())
     monkeypatch.setattr(settings.asr, "backend", "demo")
     client = TestClient(app)
 

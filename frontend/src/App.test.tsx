@@ -4,11 +4,19 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+
 vi.mock('./api', () => ({
   askMeeting: vi.fn(), createModelConfig: vi.fn(), createModelProvider: vi.fn(), deleteMeeting: vi.fn(),
   deleteModelConfig: vi.fn(), deleteModelProvider: vi.fn(), exportUrl: vi.fn(), generateMinutes: vi.fn(),
-  listMeetings: vi.fn().mockResolvedValue([]), listModelConfigs: vi.fn().mockResolvedValue([]),
-  listModelProviders: vi.fn().mockResolvedValue([]), saveMinutes: vi.fn(), transcribeMeeting: vi.fn(),
+  listMeetings: vi.fn().mockResolvedValue([]), listModelConfigs: vi.fn().mockResolvedValue([]), listProviderModels: vi.fn().mockResolvedValue(['gpt-4o-mini', 'qwen3']),
+  listModelProviders: vi.fn().mockResolvedValue([{ id: 'provider-1', name: '企业模型', protocol: 'openai_compatible', base_url: 'https://llm.example.com/v1', enabled: true, api_key_configured: true, api_key_masked: 'sk-••••test', created_at: '2026-09-21T00:00:00Z' }]), saveMinutes: vi.fn(), transcribeMeeting: vi.fn(),
   testModelProvider: vi.fn(), updateModelConfig: vi.fn(), updateModelProvider: vi.fn(), uploadRecording: vi.fn(),
 }))
 
@@ -43,5 +51,16 @@ describe('model management navigation', () => {
     expect(await screen.findByRole('heading', { name: '模型服务', level: 1 })).toBeInTheDocument()
     expect(screen.getByText('会议 RAG')).toBeInTheDocument()
     expect(screen.getByText('基于单场会议内容进行问答')).toBeInTheDocument()
+  })
+
+  it('loads provider models instead of accepting a manual model id', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /模型服务/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /添加模型/ }))
+
+    expect(await screen.findByText('选择模型')).toBeInTheDocument()
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[2])
+    expect((await screen.findAllByText('gpt-4o-mini')).length).toBeGreaterThan(0)
+    expect(screen.queryByPlaceholderText('例如：gpt-4o-mini')).not.toBeInTheDocument()
   })
 })

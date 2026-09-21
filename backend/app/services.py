@@ -18,7 +18,8 @@ class WorkflowState(TypedDict, total=False):
     minutes: dict
 
 
-async def transcribe_audio(path: Path, registry: ModelRegistry = model_registry) -> str:
+async def transcribe_audio(path: Path, registry: ModelRegistry | None = None) -> str:
+    registry = registry or model_registry
     managed = registry.get_default_model("asr")
     if managed:
         model, provider, api_key = managed

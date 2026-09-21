@@ -58,6 +58,10 @@ export async function testModelProvider(id: string) {
   return (await api.post<{ message: string }>(`/model-providers/${id}/test`)).data
 }
 
+export async function listProviderModels(id: string) {
+  return (await api.get<{ models: string[] }>(`/model-providers/${id}/models`)).data.models
+}
+
 export async function listModelConfigs() {
   return (await api.get<ModelConfig[]>('/model-configs')).data
 }

@@ -208,6 +208,8 @@ button, input, textarea { font-family: inherit; }
 .config-form > label { margin: 15px 0 7px; color: #344054; font-size: 11px; font-weight: 600; }
 .config-form > label:first-child { margin-top: 0; }
 .config-form label small { margin-left: 6px; color: #98a2b3; font-weight: 400; }
+.config-form .field-label-with-action { display: flex; align-items: center; justify-content: space-between; }
+.config-form .field-label-with-action > span { display: flex; align-items: center; }
 .config-form .ant-select { width: 100%; }
 .config-form .switch-field { padding: 12px 0 0; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #f2f4f7; }
 .config-form .switch-field > span:first-child { display: grid; }
@@ -223,6 +225,10 @@ button, input, textarea { font-family: inherit; }
 .qa-answer p { margin: 3px 0 0; color: #475467; font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
 .qa-input { display: flex; gap: 10px; }
 .qa-input .ant-btn { min-width: 92px; }
+.provider-model-catalog { max-height: 420px; overflow: auto; display: grid; gap: 7px; }
+.provider-model-catalog > div { min-height: 42px; padding: 9px 12px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 7px; background: #fcfcfd; }
+.provider-model-catalog > div .anticon { color: #6941c6; }
+.provider-model-catalog code { color: #344054; font: 11px 'IBM Plex Sans', sans-serif; }
 @media (max-width: 1100px) {
   .app-layout { grid-template-columns: 78px minmax(0, 1fr); }
   .sidebar { padding: 0 10px; }

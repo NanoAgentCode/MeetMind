@@ -67,8 +67,7 @@ def delete_model_provider(provider_id: str):
         raise HTTPException(404, "供应商不存在")
 
 
-@app.post("/api/model-providers/{provider_id}/test")
-async def test_model_provider(provider_id: str):
+async def _fetch_provider_models(provider_id: str) -> list[str]:
     credentials = model_registry.get_provider_credentials(provider_id)
     if not credentials:
         raise HTTPException(404, "供应商不存在")
@@ -79,7 +78,8 @@ async def test_model_provider(provider_id: str):
         url = f"{provider.base_url.rstrip('/')}/models"
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     elif provider.protocol == "anthropic":
-        url = f"{provider.base_url.rstrip('/')}/v1/models"
+        base_url = provider.base_url.rstrip("/")
+        url = f"{base_url}/models" if base_url.endswith("/v1") else f"{base_url}/v1/models"
         headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
     else:
         url = f"{provider.base_url.rstrip('/')}/api/tags"
@@ -89,7 +89,24 @@ async def test_model_provider(provider_id: str):
             response = await client.get(url, headers=headers)
         response.raise_for_status()
     except httpx.HTTPError as exc:
-        raise HTTPException(502, f"连接测试失败：{exc}") from exc
+        raise HTTPException(502, f"获取模型列表失败：{exc}") from exc
+    payload = response.json()
+    if provider.protocol == "ollama":
+        items = payload.get("models", [])
+        model_ids = [item.get("name") or item.get("model") for item in items]
+    else:
+        model_ids = [item.get("id") for item in payload.get("data", [])]
+    return sorted({model_id for model_id in model_ids if isinstance(model_id, str) and model_id.strip()})
+
+
+@app.get("/api/model-providers/{provider_id}/models")
+async def list_provider_models(provider_id: str):
+    return {"models": await _fetch_provider_models(provider_id)}
+
+
+@app.post("/api/model-providers/{provider_id}/test")
+async def test_model_provider(provider_id: str):
+    await _fetch_provider_models(provider_id)
     return {"status": "ok", "message": "连接成功"}
 
 
