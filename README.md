@@ -4,6 +4,10 @@
 
 `上传录音 → 语音转写 → 生成纪要 → 人工修改 → 会议内容问答 → 导出 Word/Markdown`
 
+现支持账号登录与用户隔离。首次启动前在 `backend/.env` 设置 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`；系统仅在用户表为空时创建该管理员。登录会话使用 HttpOnly Cookie，有效期 7 天。当前未开放自助注册，RBAC 与部门树尚未实现。
+
+超过 `BACKGROUND_AUDIO_MB`（默认 20 MB）的录音上传后自动进入后台转写队列；转写完成或失败时，所属用户会收到站内铃铛通知。服务重启后会恢复排队或处理中任务。打开页面并允许浏览器通知权限后，还可收到 Windows 桌面提醒；未打开页面时仍可在下次登录后查看站内通知。外部 ASR 服务的单文件大小限制仍然适用，超限会以失败通知反馈。
+
 ## 技术栈
 
 - 前端：React + TypeScript + Vite + Ant Design
@@ -42,6 +46,7 @@ docker compose up -d rustfs
 ```powershell
 uv sync
 Copy-Item backend\.env.example backend\.env
+# 编辑 backend/.env，至少配置 ADMIN_USERNAME 和 ADMIN_PASSWORD
 uv run python backend\main.py
 ```
 

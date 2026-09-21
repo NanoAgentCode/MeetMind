@@ -1,17 +1,43 @@
 import axios from 'axios'
-import type { ChatMessage, Meeting, Minutes, ModelConfig, ModelConfigInput, ModelProvider, ModelProviderInput } from './types'
+import type { AppNotification, ChatMessage, Meeting, Minutes, ModelConfig, ModelConfigInput, ModelProvider, ModelProviderInput, User } from './types'
 
 const api = axios.create({ baseURL: '/api', timeout: 120_000 })
+api.interceptors.response.use(undefined, (error) => {
+  if (error.response?.status === 401 && error.config?.url !== '/auth/login') {
+    window.dispatchEvent(new Event('meetmind:unauthorized'))
+  }
+  return Promise.reject(error)
+})
+
+export async function login(username: string, password: string) {
+  return (await api.post<User>('/auth/login', { username, password })).data
+}
+
+export async function getCurrentUser() {
+  return (await api.get<User>('/auth/me')).data
+}
+
+export async function logout() {
+  await api.post('/auth/logout')
+}
+
+export async function listNotifications() {
+  return (await api.get<AppNotification[]>('/notifications')).data
+}
+
+export async function markNotificationRead(id: string) {
+  await api.post(`/notifications/${id}/read`)
+}
 
 export async function uploadRecording(file: File, title: string) {
   const body = new FormData()
   body.append('file', file)
   body.append('title', title)
-  return (await api.post<Meeting>('/meetings', body)).data
+  return (await api.post<Meeting>('/meetings', body, { timeout: 600_000 })).data
 }
 
 export async function transcribeMeeting(id: string) {
-  return (await api.post<Meeting>(`/meetings/${id}/transcribe`)).data
+  return (await api.post<Meeting>(`/meetings/${id}/transcribe`, undefined, { timeout: 240_000 })).data
 }
 
 export async function generateMinutes(id: string) {

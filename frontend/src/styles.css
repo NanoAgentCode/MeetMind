@@ -12,7 +12,10 @@ button, input, textarea { font-family: inherit; }
 .sidebar-collapsed .brand div,
 .sidebar-collapsed .main-nav p,
 .sidebar-collapsed .main-nav button .nav-label,
-.sidebar-collapsed .sidebar-footer { display: none; }
+.sidebar-collapsed .service-state,
+.sidebar-collapsed .user-card div,
+.sidebar-collapsed .logout-icon { display: none; }
+.sidebar-collapsed .user-card { justify-content: center; padding: 8px 0; }
 .sidebar-collapsed .main-nav button { justify-content: center; padding: 0; }
 .sidebar-collapsed .main-nav button.active i { left: -10px; }
 .brand { height: 72px; padding: 0 10px; display: flex; align-items: center; gap: 11px; border-bottom: 1px solid #263244; }
@@ -33,11 +36,35 @@ button, input, textarea { font-family: inherit; }
 .sidebar-footer { margin-top: auto; padding: 14px 0 18px; border-top: 1px solid #263244; }
 .service-state { margin: 0 8px 14px; color: #98a2b3; font-size: 11px; }
 .service-state span, .environment i { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #32d583; box-shadow: 0 0 0 3px rgba(50,213,131,.12); }
-.user-card { padding: 8px; display: flex; align-items: center; gap: 9px; }
+.user-card { width: 100%; padding: 8px; border: 0; border-radius: 7px; display: flex; align-items: center; gap: 9px; background: transparent; text-align: left; cursor: pointer; transition: background .18s ease; }
+.user-card:hover, .user-card:focus-visible { background: #1d2939; }
+.user-card:focus-visible { outline: 2px solid #84adff; outline-offset: 2px; }
+.logout-icon { color: #98a2b3; font-size: 15px; }
+.user-card:hover .logout-icon { color: #fff; }
 .avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #344054; color: #fff; font-size: 12px; }
 .user-card div { min-width: 0; display: grid; flex: 1; }
 .user-card strong { color: #f2f4f7; font-size: 12px; font-weight: 500; }
 .user-card small { color: #667085; font-size: 10px; }
+.auth-loading { min-height: 100vh; display: grid; place-items: center; }
+.login-page { min-height: 100vh; padding: 40px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at 15% 15%, #dce9ff 0, transparent 28%), linear-gradient(135deg, #f7f9fc, #eef3fa); }
+.login-brand { margin-bottom: 30px; display: flex; align-items: center; gap: 12px; color: #101828; }
+.login-brand .brand-symbol { background: #101828; color: #fff; }
+.login-brand strong { font-size: 21px; letter-spacing: .1em; }
+.login-brand small { align-self: end; margin-bottom: 5px; color: #667085; font: 600 9px 'IBM Plex Sans', sans-serif; letter-spacing: .2em; }
+.login-card { width: min(100%, 410px); padding: 35px; border: 1px solid #dbe4f0; border-radius: 14px; background: #fff; box-shadow: 0 18px 50px rgba(16,40,80,.09); }
+.login-eyebrow { margin: 0 0 10px; color: #155eef; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.login-card h1 { margin: 0; color: #101828; font-size: 28px; }
+.login-card > p:not(.login-eyebrow) { margin: 8px 0 27px; color: #667085; font-size: 12px; }
+.login-card form { display: grid; }
+.login-card label { margin: 14px 0 8px; color: #344054; font-size: 12px; font-weight: 600; }
+.login-card .ant-btn { width: 100%; margin-top: 27px; }
+.login-footnote { margin-top: 26px; color: #98a2b3; font-size: 11px; }
+.notification-list { width: 320px; max-height: 410px; overflow: auto; }
+.notification-title { padding: 3px 3px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.notification-list > button { width: 100%; padding: 12px 5px; border: 0; border-bottom: 1px solid var(--line); display: grid; gap: 3px; background: #eff4ff; text-align: left; cursor: pointer; }
+.notification-list > button.read { background: #fff; }
+.notification-list > button strong { color: #344054; font-size: 12px; }
+.notification-list > button span, .notification-list > button small { color: #667085; font-size: 11px; }
 .main-column { min-width: 0; }
 .topbar { height: 64px; padding: 0 34px; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid var(--line); }
 .topbar-title { display: flex; align-items: center; gap: 18px; color: #344054; font-size: 13px; font-weight: 500; }
@@ -252,7 +279,8 @@ button, input, textarea { font-family: inherit; }
   .app-layout { grid-template-columns: 78px minmax(0, 1fr); }
   .sidebar { padding: 0 10px; }
   .brand { justify-content: center; padding: 0; }
-  .brand div, .main-nav p, .main-nav button .nav-label, .sidebar-footer { display: none; }
+  .brand div, .main-nav p, .main-nav button .nav-label, .service-state, .user-card div, .logout-icon { display: none; }
+  .user-card { justify-content: center; padding: 8px 0; }
   .main-nav button { justify-content: center; padding: 0; }
   .main-nav button.active i { left: -10px; }
   .intake-grid { grid-template-columns: 1fr; }
@@ -270,6 +298,7 @@ button, input, textarea { font-family: inherit; }
   .sidebar-collapsed .main-nav button .nav-label { display: none; }
   .sidebar-collapsed .main-nav button { justify-content: center; padding: 0; }
   .sidebar { position: static; width: 100%; height: 58px; padding: 0 18px; flex-direction: row; align-items: center; }
+  .sidebar-footer { margin: 0 0 0 8px; padding: 0; border: 0; }
   .brand { height: 58px; border: 0; justify-content: flex-start; }
   .brand div { display: grid; }
   .main-nav { margin-left: auto; padding: 0; display: flex; }

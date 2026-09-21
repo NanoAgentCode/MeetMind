@@ -17,7 +17,8 @@ class Meeting(BaseModel):
     filename: str
     title: str
     created_at: datetime
-    status: Literal["uploaded", "transcribed", "generated", "edited"]
+    status: Literal["uploaded", "queued", "transcribing", "transcription_failed", "transcribed", "generated", "edited"]
+    owner_id: str | None = None
     transcript: str = ""
     minutes: Minutes | None = None
 

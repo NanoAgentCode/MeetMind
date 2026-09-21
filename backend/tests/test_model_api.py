@@ -11,6 +11,11 @@ from backend.app.store import MeetingStore
 from backend.tests.test_flow import MemoryObjectStorage
 
 
+@pytest.fixture(autouse=True)
+def authenticated_test_user(monkeypatch):
+    monkeypatch.setattr(main_module.auth_store, "get_user", lambda _token: {"id": "test-user", "username": "test", "display_name": "测试用户"})
+
+
 class FakeModelResponse:
     def __init__(self, payload):
         self.payload = payload
@@ -91,6 +96,7 @@ def test_meeting_question_uses_meeting_context(monkeypatch, tmp_path):
             title="产品周会",
             created_at=datetime.now(timezone.utc),
             status="transcribed",
+            owner_id="test-user",
             transcript="决定周五发布，张明负责上线。",
         )
     )
@@ -119,7 +125,7 @@ def test_unified_chat_supports_regular_and_meeting_modes(monkeypatch, tmp_path, 
     meeting_store.save(
         Meeting(
             id="meeting-1", filename="weekly.mp3", title="产品周会",
-            created_at=datetime.now(timezone.utc), status="transcribed", transcript="决定周五发布。",
+            created_at=datetime.now(timezone.utc), status="transcribed", transcript="决定周五发布。", owner_id="test-user",
         )
     )
 

@@ -100,6 +100,16 @@ class MeetingStore:
                 )
                 """
             )
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(meetings)")}
+            if "owner_id" not in columns:
+                connection.execute("ALTER TABLE meetings ADD COLUMN owner_id TEXT")
+            connection.executescript("""
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, meeting_id TEXT,
+                    title TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL,
+                    read_at TEXT
+                );
+            """)
 
     @staticmethod
     def audio_key(meeting: Meeting) -> str:
@@ -110,15 +120,16 @@ class MeetingStore:
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO meetings (id, filename, title, created_at, status, transcript, minutes_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO meetings (id, filename, title, created_at, status, transcript, minutes_json, owner_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     filename = excluded.filename,
                     title = excluded.title,
                     created_at = excluded.created_at,
                     status = excluded.status,
                     transcript = excluded.transcript,
-                    minutes_json = excluded.minutes_json
+                    minutes_json = excluded.minutes_json,
+                    owner_id = excluded.owner_id
                 """,
                 (
                     meeting.id,
@@ -128,6 +139,7 @@ class MeetingStore:
                     meeting.status,
                     meeting.transcript,
                     minutes_json,
+                    meeting.owner_id,
                 ),
             )
         return meeting
@@ -139,9 +151,12 @@ class MeetingStore:
             return None
         return self._meeting_from_row(row)
 
-    def list(self) -> list[Meeting]:
+    def list(self, owner_id: str | None = None) -> list[Meeting]:
         with self._connect() as connection:
-            rows = connection.execute("SELECT * FROM meetings ORDER BY created_at DESC").fetchall()
+            rows = connection.execute(
+                "SELECT * FROM meetings WHERE owner_id = ? ORDER BY created_at DESC" if owner_id else "SELECT * FROM meetings ORDER BY created_at DESC",
+                (owner_id,) if owner_id else (),
+            ).fetchall()
         return [self._meeting_from_row(row) for row in rows]
 
     @staticmethod
@@ -155,6 +170,7 @@ class MeetingStore:
                 "status": row["status"],
                 "transcript": row["transcript"],
                 "minutes": json.loads(row["minutes_json"]) if row["minutes_json"] else None,
+                "owner_id": row["owner_id"],
             }
         )
 
@@ -167,6 +183,37 @@ class MeetingStore:
             self.storage.delete(key)
         with self._connect() as connection:
             connection.execute("DELETE FROM meetings WHERE id = ?", (meeting.id,))
+            connection.execute("DELETE FROM notifications WHERE meeting_id = ?", (meeting.id,))
+
+    def pending_transcriptions(self) -> list[Meeting]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT * FROM meetings WHERE status IN ('queued', 'transcribing')").fetchall()
+        return [self._meeting_from_row(row) for row in rows]
+
+    def notify(self, user_id: str, meeting_id: str, title: str, body: str) -> None:
+        from datetime import datetime, timezone
+        from uuid import uuid4
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, ?, NULL)",
+                (uuid4().hex, user_id, meeting_id, title, body, datetime.now(timezone.utc).isoformat()),
+            )
+
+    def list_notifications(self, user_id: str) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 100", (user_id,)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def mark_notification_read(self, notification_id: str, user_id: str) -> bool:
+        from datetime import datetime, timezone
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ?",
+                (datetime.now(timezone.utc).isoformat(), notification_id, user_id),
+            )
+        return cursor.rowcount > 0
 
     def save_audio(self, meeting: Meeting, content: bytes, content_type: str) -> None:
         self.storage.put(self.audio_key(meeting), content, content_type)

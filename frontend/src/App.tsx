@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppstoreOutlined, AudioOutlined, BellOutlined, CheckCircleFilled, CloudServerOutlined,
   DeleteOutlined, EditOutlined, FileTextOutlined, FolderOpenOutlined, LoadingOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined, MessageOutlined, MoreOutlined, PlusOutlined, RobotOutlined, SafetyCertificateOutlined,
+  LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MessageOutlined, PlusOutlined, RobotOutlined, SafetyCertificateOutlined,
   SearchOutlined, SettingOutlined, TeamOutlined, UploadOutlined,
 } from '@ant-design/icons'
-import { Button, Empty, Input, Modal, Select, Spin, Table, Tag, Upload, message } from 'antd'
+import { Button, Empty, Input, Modal, Popover, Select, Spin, Table, Tag, Upload, message } from 'antd'
 import type { UploadFile } from 'antd'
-import { deleteMeeting, generateMinutes, listMeetings, saveMinutes, transcribeMeeting, uploadRecording } from './api'
-import type { Meeting, Minutes } from './types'
+import { deleteMeeting, generateMinutes, getCurrentUser, getMeeting, listMeetings, listNotifications, login, logout, markNotificationRead, saveMinutes, transcribeMeeting, uploadRecording } from './api'
+import type { AppNotification, Meeting, Minutes, User } from './types'
 import MeetingChat from './MeetingChat'
 import ModelManagement from './ModelManagement'
 
@@ -26,9 +26,12 @@ const navigation = [
   { key: 'templates', label: '纪要模板', icon: FileTextOutlined },
   { key: 'team', label: '团队空间', icon: TeamOutlined },
 ]
-const rank: Record<string, number> = { uploaded: 0, transcribed: 1, generated: 2, edited: 3 }
+const rank: Record<string, number> = { uploaded: 0, queued: 0, transcribing: 0, transcription_failed: 0, transcribed: 1, generated: 2, edited: 3 }
 const statusMeta = {
   uploaded: { label: '待转写', color: 'default' },
+  queued: { label: '排队中', color: 'processing' },
+  transcribing: { label: '转写中', color: 'processing' },
+  transcription_failed: { label: '转写失败', color: 'error' },
   transcribed: { label: '待生成', color: 'processing' },
   generated: { label: '待定稿', color: 'warning' },
   edited: { label: '已完成', color: 'success' },
@@ -111,6 +114,13 @@ function RecordsPage({
 }
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [loginBusy, setLoginBusy] = useState(false)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const seenNotificationIds = useRef<Set<string> | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [page, setPage] = useState<'workspace' | 'records' | 'chat' | 'models'>('workspace')
   const [fileList, setFileList] = useState<UploadFile[]>([])
@@ -130,6 +140,99 @@ export default function App() {
     const matchesQuery = `${item.title} ${item.filename}`.toLowerCase().includes(query.trim().toLowerCase())
     return matchesQuery && (statusFilter === 'all' || item.status === statusFilter)
   }), [query, records, statusFilter])
+
+  useEffect(() => {
+    void getCurrentUser().then(setUser).catch(() => setUser(null)).finally(() => setAuthLoading(false))
+  }, [])
+
+  useEffect(() => {
+    const resetSession = () => {
+      setUser(null)
+      setMeeting(null)
+      setRecords([])
+      setRecordsLoaded(false)
+      setNotifications([])
+      seenNotificationIds.current = null
+    }
+    window.addEventListener('meetmind:unauthorized', resetSession)
+    return () => window.removeEventListener('meetmind:unauthorized', resetSession)
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    let active = true
+    async function refresh() {
+      try {
+        const latest = await listNotifications()
+        if (!active) return
+        const previous = seenNotificationIds.current
+        if (previous && 'Notification' in window && Notification.permission === 'granted') {
+          latest.filter((item) => !item.read_at && !previous.has(item.id)).forEach((item) => {
+            new Notification(item.title, { body: item.body })
+          })
+        }
+        seenNotificationIds.current = new Set(latest.map((item) => item.id))
+        setNotifications(latest)
+      } catch { /* Notification polling should not interrupt the workspace. */ }
+    }
+    void refresh()
+    const timer = window.setInterval(refresh, 10_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [user])
+
+  useEffect(() => {
+    if (!user || !meeting || !['queued', 'transcribing'].includes(meeting.status)) return
+    const timer = window.setInterval(async () => {
+      try {
+        const latest = await getMeeting(meeting.id)
+        setMeeting(latest)
+        setRecords((current) => current.map((item) => item.id === latest.id ? latest : item))
+      } catch { /* Keep the current view until the user refreshes. */ }
+    }, 5_000)
+    return () => window.clearInterval(timer)
+  }, [user, meeting])
+
+  async function handleLogin() {
+    setLoginBusy(true)
+    try {
+      setUser(await login(username.trim(), password))
+      setPassword('')
+      message.success('登录成功')
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      message.error(detail || '登录失败')
+    } finally {
+      setLoginBusy(false)
+    }
+  }
+
+  async function handleLogout() {
+    await logout()
+    setUser(null)
+    setMeeting(null)
+    setRecords([])
+    setRecordsLoaded(false)
+    setNotifications([])
+    seenNotificationIds.current = null
+  }
+
+  function confirmLogout() {
+    Modal.confirm({
+      title: '确认退出登录？',
+      content: '退出后需要重新输入账号和密码才能访问工作台。',
+      okText: '退出登录',
+      cancelText: '取消',
+      onOk: handleLogout,
+    })
+  }
+
+  async function openNotification(item: AppNotification) {
+    await markNotificationRead(item.id)
+    setNotifications((current) => current.map((entry) => entry.id === item.id ? { ...entry, read_at: new Date().toISOString() } : entry))
+    if (item.meeting_id) {
+      try { openWorkspace(await getMeeting(item.meeting_id)) } catch { message.error('会议已不存在') }
+    }
+  }
 
   async function loadRecords() {
     setRecordsLoading(true)
@@ -220,6 +323,9 @@ export default function App() {
     setDraft({ ...draft, [field]: field === 'title' || field === 'summary' ? value : lines(value) })
   }
 
+  if (authLoading) return <div className="auth-loading"><Spin size="large" /></div>
+  if (!user) return <div className="login-page"><div className="login-brand"><span className="brand-symbol">会</span><strong>会智录</strong><small>MEETMIND</small></div><section className="login-card"><p className="login-eyebrow">企业会议工作空间</p><h1>欢迎回来</h1><p>登录后继续处理录音、纪要与会议问答</p><form onSubmit={(event) => { event.preventDefault(); void handleLogin() }}><label htmlFor="login-username">账号</label><Input id="login-username" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="请输入账号" /><label htmlFor="login-password">密码</label><Input.Password id="login-password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入密码" /><Button type="primary" htmlType="submit" loading={loginBusy} disabled={!username.trim() || !password}>登录工作台</Button></form></section><span className="login-footnote">安全协作 · 会议内容仅对账号所属用户可见</span></div>
+
   return (
     <div className={`app-layout${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
@@ -238,7 +344,7 @@ export default function App() {
         </nav>
         <div className="sidebar-footer">
           <div className="service-state"><span />服务运行正常</div>
-          <div className="user-card"><span className="avatar">管</span><div><strong>系统管理员</strong><small>企业工作空间</small></div><MoreOutlined /></div>
+          <button className="user-card" type="button" aria-label="退出登录" title="退出登录" onClick={confirmLogout}><span className="avatar">{user.display_name.slice(0, 1)}</span><div><strong>{user.display_name}</strong><small>{user.username}</small></div><LogoutOutlined className="logout-icon" /></button>
         </div>
       </aside>
 
@@ -256,7 +362,7 @@ export default function App() {
             </button>
             <span>智能会议工作台</span>
           </div>
-          <div className="topbar-actions"><span className="environment"><i />企业专属环境</span><button aria-label="通知" type="button"><BellOutlined /><b>2</b></button></div>
+          <div className="topbar-actions"><span className="environment"><i />企业专属环境</span><Popover placement="bottomRight" trigger="click" content={<div className="notification-list"><div className="notification-title"><strong>站内通知</strong>{'Notification' in window && Notification.permission === 'default' && <Button size="small" onClick={() => void Notification.requestPermission()}>开启桌面提醒</Button>}</div>{notifications.length ? notifications.map((item) => <button className={item.read_at ? 'read' : ''} type="button" key={item.id} onClick={() => void openNotification(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{formatDate(item.created_at)}</small></button>) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无通知" />}</div>}><button aria-label="通知" type="button"><BellOutlined />{notifications.some((item) => !item.read_at) && <b>{notifications.filter((item) => !item.read_at).length}</b>}</button></Popover></div>
         </header>
 
         <main className="content">
@@ -315,7 +421,8 @@ export default function App() {
               <div className="workspace-toolbar">
                 <div><strong>内容处理区</strong><span>请按任务进度完成处理与确认</span></div>
                 <div className="actions workspace-actions">
-                  {meeting.status === 'uploaded' && <Button type="primary" icon={<AudioOutlined />} onClick={() => run('转写', () => transcribeMeeting(meeting.id))} loading={busy === '转写'}>开始转写</Button>}
+                  {(meeting.status === 'uploaded' || meeting.status === 'transcription_failed') && <Button type="primary" icon={<AudioOutlined />} onClick={() => run('转写', () => transcribeMeeting(meeting.id))} loading={busy === '转写'}>{meeting.status === 'transcription_failed' ? '重试转写' : '开始转写'}</Button>}
+                  {(meeting.status === 'queued' || meeting.status === 'transcribing') && <Tag color="processing">{meeting.status === 'queued' ? '后台排队中' : '后台转写中'}</Tag>}
                   {meeting.status === 'transcribed' && <Button type="primary" icon={<RobotOutlined />} onClick={() => run('生成纪要', () => generateMinutes(meeting.id))} loading={busy === '生成纪要'}>生成纪要</Button>}
                   {draft && <Button className="save-action" type="primary" icon={<EditOutlined />} onClick={handleSave} loading={busy === '保存定稿'}><span>保存定稿<small>同步当前修改</small></span></Button>}
                 </div>
@@ -323,7 +430,7 @@ export default function App() {
               <div className="editor-grid">
                 <article className="document-panel">
                   <div className="document-head"><div><span className="document-icon"><AudioOutlined /></span><div><h3>语音转写</h3><p>原始会议内容</p></div></div><Tag>只读</Tag></div>
-                  <div className="document-body">{busy === '转写' ? <div className="processing"><LoadingOutlined spin /><p>正在识别录音内容…</p></div> : meeting.transcript ? <div className="transcript">{meeting.transcript}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="等待开始转写" />}</div>
+                  <div className="document-body">{busy === '转写' || ['queued', 'transcribing'].includes(meeting.status) ? <div className="processing"><LoadingOutlined spin /><p>后台正在处理录音，完成后会发送通知…</p></div> : meeting.transcript ? <div className="transcript">{meeting.transcript}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={meeting.status === 'transcription_failed' ? '转写失败，请重试' : '等待开始转写'} />}</div>
                 </article>
                 <article className="document-panel minutes-panel">
                   <div className="document-head"><div><span className="document-icon ai"><RobotOutlined /></span><div><h3>智能纪要</h3><p>AI 生成 · 支持人工编辑</p></div></div>{draft && <Tag color="processing">可编辑</Tag>}</div>

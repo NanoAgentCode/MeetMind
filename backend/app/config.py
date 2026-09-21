@@ -12,6 +12,10 @@ class AppSettings(BaseSettings):
     host: str = Field(default="127.0.0.1", validation_alias="APP_HOST")
     port: int = Field(default=8000, validation_alias="APP_PORT")
     max_upload_mb: int = Field(default=200, validation_alias="MAX_UPLOAD_MB")
+    background_audio_mb: int = Field(default=20, validation_alias="BACKGROUND_AUDIO_MB")
+    admin_username: str = Field(default="", validation_alias="ADMIN_USERNAME")
+    admin_password: str = Field(default="", validation_alias="ADMIN_PASSWORD")
+    cookie_secure: bool = Field(default=False, validation_alias="COOKIE_SECURE")
 
 
 class ASRSettings(BaseSettings):

@@ -1,4 +1,16 @@
-export type MeetingStatus = 'uploaded' | 'transcribed' | 'generated' | 'edited'
+export type MeetingStatus = 'uploaded' | 'queued' | 'transcribing' | 'transcription_failed' | 'transcribed' | 'generated' | 'edited'
+
+export interface User { id: string; username: string; display_name: string }
+
+export interface AppNotification {
+  id: string
+  user_id: string
+  meeting_id: string | null
+  title: string
+  body: string
+  created_at: string
+  read_at: string | null
+}
 
 export interface Minutes {
   title: string
@@ -14,6 +26,7 @@ export interface Meeting {
   title: string
   created_at: string
   status: MeetingStatus
+  owner_id?: string | null
   transcript: string
   minutes: Minutes | null
 }

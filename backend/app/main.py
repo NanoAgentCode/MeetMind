@@ -1,21 +1,37 @@
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from uuid import uuid4
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response as FastAPIResponse, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from .config import settings
+from .auth import auth_store
 from .exporter import docx_bytes, markdown
 from .model_registry import model_registry
 from .models import ChatRequest, ChatResponse, Meeting, MeetingAnswer, MeetingQuestion, Minutes, ModelConfig, ModelConfigInput, Provider, ProviderInput
+from pydantic import BaseModel
 from .services import answer_chat, answer_meeting_question, create_minutes, transcribe_audio
 from .store import store
 
-app = FastAPI(title="会智录 API", version="0.1.0")
+_running_transcriptions: set[str] = set()
+_transcription_slots = asyncio.Semaphore(1)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    auth_store.bootstrap_admin()
+    for pending in store.pending_transcriptions():
+        schedule_transcription(pending.id)
+    yield
+
+
+app = FastAPI(title="会智录 API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -27,11 +43,107 @@ app.add_middleware(
 ALLOWED_SUFFIXES = {".mp3", ".wav", ".m4a", ".webm", ".mp4", ".mpeg", ".ogg"}
 
 
-def require_meeting(meeting_id: str) -> Meeting:
+class LoginInput(BaseModel):
+    username: str
+    password: str
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    if request.method == "OPTIONS" or not request.url.path.startswith("/api/") or request.url.path in {"/api/health", "/api/auth/login"}:
+        return await call_next(request)
+    user = auth_store.get_user(request.cookies.get("meetmind_session"))
+    if not user:
+        return Response(status_code=401, content='{"detail":"请先登录"}', media_type="application/json")
+    request.state.user = user
+    return await call_next(request)
+
+
+@app.post("/api/auth/login")
+def login(data: LoginInput, response: FastAPIResponse):
+    if not settings.app.admin_username or not settings.app.admin_password:
+        raise HTTPException(503, "请先配置 ADMIN_USERNAME 和 ADMIN_PASSWORD")
+    auth_store.bootstrap_admin()
+    user = auth_store.authenticate(data.username, data.password)
+    if not user:
+        raise HTTPException(401, "账号或密码错误")
+    token = auth_store.create_session(user["id"])
+    response.set_cookie("meetmind_session", token, max_age=7 * 86400, httponly=True, samesite="lax", secure=settings.app.cookie_secure)
+    return user
+
+
+@app.post("/api/auth/logout", status_code=204)
+def logout(request: Request, response: FastAPIResponse):
+    auth_store.delete_session(request.cookies.get("meetmind_session"))
+    response.delete_cookie("meetmind_session")
+
+
+@app.get("/api/auth/me")
+def current_user(request: Request):
+    return request.state.user
+
+
+@app.get("/api/notifications")
+def list_notifications(request: Request):
+    return store.list_notifications(request.state.user["id"])
+
+
+@app.post("/api/notifications/{notification_id}/read", status_code=204)
+def mark_notification_read(notification_id: str, request: Request):
+    if not store.mark_notification_read(notification_id, request.state.user["id"]):
+        raise HTTPException(404, "通知不存在")
+
+
+def require_meeting(meeting_id: str, user_id: str | None = None) -> Meeting:
     meeting = store.get(meeting_id)
-    if not meeting:
+    if not meeting or (user_id and meeting.owner_id != user_id):
         raise HTTPException(404, "会议不存在")
     return meeting
+
+
+async def run_transcription(meeting_id: str):
+    meeting = store.get(meeting_id)
+    if not meeting or meeting.status not in {"queued", "transcribing"}:
+        _running_transcriptions.discard(meeting_id)
+        return
+    meeting.status = "transcribing"
+    store.save(meeting)
+    temporary_path: Path | None = None
+    try:
+        audio = await asyncio.to_thread(store.get_audio, meeting)
+        with NamedTemporaryFile(suffix=Path(meeting.filename).suffix, delete=False) as temporary:
+            temporary.write(audio)
+            temporary_path = Path(temporary.name)
+        transcript = await transcribe_audio(temporary_path)
+        current = store.get(meeting_id)
+        if current and current.status == "transcribing":
+            current.transcript = transcript
+            current.status = "transcribed"
+            store.save(current)
+            if current.owner_id:
+                store.notify(current.owner_id, current.id, "转写完成", f"{current.title} 已完成语音转写")
+    except Exception:
+        current = store.get(meeting_id)
+        if current and current.status == "transcribing":
+            current.status = "transcription_failed"
+            store.save(current)
+            if current.owner_id:
+                store.notify(current.owner_id, current.id, "转写失败", f"{current.title} 转写失败，请打开会议重试")
+    finally:
+        if temporary_path:
+            temporary_path.unlink(missing_ok=True)
+        _running_transcriptions.discard(meeting_id)
+
+
+async def _queued_transcription(meeting_id: str):
+    async with _transcription_slots:
+        await run_transcription(meeting_id)
+
+
+def schedule_transcription(meeting_id: str):
+    if meeting_id not in _running_transcriptions:
+        _running_transcriptions.add(meeting_id)
+        asyncio.create_task(_queued_transcription(meeting_id))
 
 
 @app.get("/api/health")
@@ -140,7 +252,7 @@ def delete_model_config(model_config_id: str):
 
 
 @app.post("/api/meetings", response_model=Meeting, status_code=201)
-async def upload_meeting(file: UploadFile = File(...), title: str = Form(...)):
+async def upload_meeting(request: Request, file: UploadFile = File(...), title: str = Form(...)):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
         raise HTTPException(400, "仅支持 MP3、WAV、M4A、WEBM、MP4、MPEG 或 OGG 文件")
@@ -156,33 +268,41 @@ async def upload_meeting(file: UploadFile = File(...), title: str = Form(...)):
         title=title.strip() or "未命名会议",
         created_at=datetime.now(timezone.utc),
         status="uploaded",
+        owner_id=request.state.user["id"],
     )
     try:
         store.save_audio(meeting, content, file.content_type or "application/octet-stream")
     except Exception as exc:
         raise HTTPException(503, f"RustFS 存储不可用：{exc}") from exc
-    return store.save(meeting)
+    if len(content) > settings.app.background_audio_mb * 1024 * 1024:
+        meeting.status = "queued"
+    saved = store.save(meeting)
+    if meeting.status == "queued":
+        schedule_transcription(meeting.id)
+    return saved
 
 
 @app.get("/api/meetings", response_model=list[Meeting])
-def list_meetings():
-    return store.list()
+def list_meetings(request: Request):
+    return store.list(request.state.user["id"])
 
 
 @app.get("/api/meetings/{meeting_id}", response_model=Meeting)
-def get_meeting(meeting_id: str):
-    return require_meeting(meeting_id)
+def get_meeting(meeting_id: str, request: Request):
+    return require_meeting(meeting_id, request.state.user["id"])
 
 
 @app.delete("/api/meetings/{meeting_id}", status_code=204)
-def delete_meeting(meeting_id: str):
-    meeting = require_meeting(meeting_id)
+def delete_meeting(meeting_id: str, request: Request):
+    meeting = require_meeting(meeting_id, request.state.user["id"])
     store.delete(meeting)
 
 
 @app.post("/api/meetings/{meeting_id}/transcribe", response_model=Meeting)
-async def transcribe(meeting_id: str):
-    meeting = require_meeting(meeting_id)
+async def transcribe(meeting_id: str, request: Request):
+    meeting = require_meeting(meeting_id, request.state.user["id"])
+    if meeting.status not in {"uploaded", "transcription_failed"}:
+        raise HTTPException(409, "当前会议无法开始转写")
     temporary_path: Path | None = None
     try:
         audio = store.get_audio(meeting)
@@ -200,8 +320,8 @@ async def transcribe(meeting_id: str):
 
 
 @app.post("/api/meetings/{meeting_id}/questions", response_model=MeetingAnswer)
-async def ask_meeting(meeting_id: str, data: MeetingQuestion):
-    meeting = require_meeting(meeting_id)
+async def ask_meeting(meeting_id: str, data: MeetingQuestion, request: Request):
+    meeting = require_meeting(meeting_id, request.state.user["id"])
     try:
         return MeetingAnswer(answer=await answer_meeting_question(meeting, data.question, model_registry))
     except (ValueError, httpx.HTTPError) as exc:
@@ -209,8 +329,8 @@ async def ask_meeting(meeting_id: str, data: MeetingQuestion):
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(data: ChatRequest):
-    meeting = require_meeting(data.meeting_id) if data.meeting_id else None
+async def chat(data: ChatRequest, request: Request):
+    meeting = require_meeting(data.meeting_id, request.state.user["id"]) if data.meeting_id else None
     try:
         answer = await answer_chat(data.question, data.history, meeting, model_registry)
         return ChatResponse(answer=answer, meeting_id=data.meeting_id)
@@ -219,8 +339,8 @@ async def chat(data: ChatRequest):
 
 
 @app.post("/api/meetings/{meeting_id}/minutes/generate", response_model=Meeting)
-async def generate(meeting_id: str):
-    meeting = require_meeting(meeting_id)
+async def generate(meeting_id: str, request: Request):
+    meeting = require_meeting(meeting_id, request.state.user["id"])
     if not meeting.transcript:
         raise HTTPException(409, "请先完成语音转写")
     try:
@@ -232,8 +352,8 @@ async def generate(meeting_id: str):
 
 
 @app.put("/api/meetings/{meeting_id}/minutes", response_model=Meeting)
-def update_minutes(meeting_id: str, minutes: Minutes):
-    meeting = require_meeting(meeting_id)
+def update_minutes(meeting_id: str, minutes: Minutes, request: Request):
+    meeting = require_meeting(meeting_id, request.state.user["id"])
     if meeting.minutes is None:
         raise HTTPException(409, "请先生成会议纪要")
     meeting.minutes = minutes
@@ -242,8 +362,8 @@ def update_minutes(meeting_id: str, minutes: Minutes):
 
 
 @app.get("/api/meetings/{meeting_id}/export")
-def export_minutes(meeting_id: str, format: str = "docx"):
-    meeting = require_meeting(meeting_id)
+def export_minutes(meeting_id: str, request: Request, format: str = "docx"):
+    meeting = require_meeting(meeting_id, request.state.user["id"])
     if meeting.status != "edited" or meeting.minutes is None:
         raise HTTPException(409, "请先保存人工定稿，再导出")
     safe_name = f"meeting-{meeting.id[:8]}"
