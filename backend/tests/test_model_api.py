@@ -150,6 +150,31 @@ def test_unified_chat_supports_regular_and_meeting_modes(monkeypatch, tmp_path, 
     assert response.json()["meeting_id"] == meeting_id
 
 
+def test_chat_history_is_private_and_continues_with_saved_context(monkeypatch, tmp_path):
+    monkeypatch.setattr(main_module, "store", MeetingStore(MemoryObjectStorage(), tmp_path / "history.db"))
+    seen = []
+
+    async def fake_chat(question, history, meeting, _registry):
+        seen.append([turn.content for turn in history])
+        return f"回答：{question}"
+
+    monkeypatch.setattr(main_module, "answer_chat", fake_chat)
+    client = TestClient(app)
+    first = client.post("/api/chat", json={"question": "第一问"})
+    assert first.status_code == 200
+    conversation_id = first.json()["conversation_id"]
+    assert client.get("/api/chat/conversations").json()[0]["title"] == "第一问"
+    second = client.post("/api/chat", json={"question": "第二问", "conversation_id": conversation_id})
+    assert second.status_code == 200
+    assert seen == [[], ["第一问", "回答：第一问"]]
+    assert len(client.get(f"/api/chat/conversations/{conversation_id}").json()["messages"]) == 4
+
+    monkeypatch.setattr(main_module.auth_store, "get_user", lambda _token: {"id": "other-user", "permissions": list(PERMISSIONS)})
+    assert client.get("/api/chat/conversations").json() == []
+    assert client.get(f"/api/chat/conversations/{conversation_id}").status_code == 404
+    assert client.post("/api/chat", json={"question": "第三问", "conversation_id": conversation_id}).status_code == 404
+
+
 @pytest.mark.parametrize(
     "protocol,base_url,payload,expected_url,expected_models",
     [

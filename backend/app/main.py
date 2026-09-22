@@ -13,11 +13,12 @@ from fastapi.responses import Response
 from .access import has_permission, required_route_permissions
 from .access_routes import create_access_router
 from .auth import auth_store
+from .chat_store import ChatStore
 from .config import settings
 from .exporter import docx_bytes, markdown
 from .model_registry import model_registry
 from .model_routes import create_model_router
-from .models import ChatRequest, ChatResponse, Meeting, MeetingAnswer, MeetingQuestion, Minutes
+from .models import ChatRequest, ChatResponse, ChatTurn, Meeting, MeetingAnswer, MeetingQuestion, Minutes
 from .services import answer_chat, answer_meeting_question, create_minutes, transcribe_audio
 from .store import store
 
@@ -220,12 +221,35 @@ async def ask_meeting(meeting_id: str, data: MeetingQuestion, request: Request):
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(data: ChatRequest, request: Request):
-    meeting = require_meeting(data.meeting_id, request.state.user) if data.meeting_id else None
+    chats = ChatStore(store.database_path)
+    owner_id = request.state.user["id"]
+    conversation = chats.get(data.conversation_id, owner_id) if data.conversation_id else None
+    if data.conversation_id and not conversation:
+        raise HTTPException(404, "对话不存在")
+    meeting_id = conversation["meeting_id"] if conversation else data.meeting_id
+    meeting = require_meeting(meeting_id, request.state.user) if meeting_id else None
+    history = [ChatTurn(**turn) for turn in conversation["messages"][-20:]] if conversation else data.history
     try:
-        answer = await answer_chat(data.question, data.history, meeting, model_registry)
-        return ChatResponse(answer=answer, meeting_id=data.meeting_id)
+        answer = await answer_chat(data.question, history, meeting, model_registry)
+        messages = (conversation["messages"] if conversation else [turn.model_dump() for turn in history]) + [
+            {"role": "user", "content": data.question}, {"role": "assistant", "content": answer}]
+        conversation_id = chats.save(owner_id, meeting_id, data.question, messages, data.conversation_id)
+        return ChatResponse(answer=answer, meeting_id=meeting_id, conversation_id=conversation_id)
     except (ValueError, httpx.HTTPError) as exc:
         raise HTTPException(502, f"对话失败：{exc}") from exc
+
+
+@app.get("/api/chat/conversations")
+def list_chat_conversations(request: Request):
+    return ChatStore(store.database_path).list(request.state.user["id"])
+
+
+@app.get("/api/chat/conversations/{conversation_id}")
+def get_chat_conversation(conversation_id: str, request: Request):
+    conversation = ChatStore(store.database_path).get(conversation_id, request.state.user["id"])
+    if not conversation:
+        raise HTTPException(404, "对话不存在")
+    return conversation
 
 
 @app.post("/api/meetings/{meeting_id}/minutes/generate", response_model=Meeting)

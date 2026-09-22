@@ -264,7 +264,14 @@ button, input, textarea { font-family: inherit; }
 .department-detail p { margin: 0 0 20px; color: #667085; font-size: 11px; }
 .permission-grid { max-height: 310px; padding: 14px; overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 11px; border: 1px solid var(--line); border-radius: 8px; background: #fcfcfd; }
 .permission-grid .ant-checkbox-wrapper { margin: 0; font-size: 11px; }
-.chat-page { max-width: 1120px; margin: 0 auto; }
+.chat-page { max-width: 1480px; margin: 0 auto; }
+.chat-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 4px; }
+.chat-history { min-height: calc(100vh - 210px); padding: 16px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.chat-history h2 { margin: 24px 10px 10px; color: #667085; font-size: 12px; font-weight: 600; }
+.chat-history > button:not(.ant-btn) { width: 100%; min-height: 38px; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: #475467; text-align: left; cursor: pointer; }
+.chat-history > button:not(.ant-btn).active, .chat-history > button:not(.ant-btn):hover { background: #eff4ff; color: #155eef; }
+.chat-history > button span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-history p { margin: 12px 10px; color: #98a2b3; font-size: 12px; }
 .chat-page-heading { align-items: center; margin-bottom: 18px; }
 .chat-shell { min-height: calc(100vh - 210px); overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 8px rgba(16,24,40,.04); }
 .chat-context { min-height: 72px; padding: 14px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); background: #fcfcfd; }
@@ -374,6 +381,8 @@ button, input, textarea { font-family: inherit; }
   .records-toolbar, .records-toolbar > div { align-items: stretch; flex-direction: column; }
   .records-toolbar .ant-input-affix-wrapper, .records-toolbar .ant-select { width: 100%; }
   .chat-messages { padding: 22px 16px; }
+  .chat-layout { grid-template-columns: 1fr; }
+  .chat-history { min-height: auto; max-height: 180px; overflow-y: auto; }
   .chat-context, .chat-composer { padding-right: 14px; padding-left: 14px; }
   .meeting-mention-popover { right: 14px; left: 14px; }
   .provider-card .card-actions { justify-content: flex-end; }

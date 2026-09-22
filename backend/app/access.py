@@ -57,7 +57,7 @@ def required_route_permissions(path: str, method: str) -> tuple[str, ...]:
         return ("department:read", "department:manage", "user:manage") if method == "GET" else ("department:manage",)
     if path.startswith(("/api/model-providers", "/api/model-configs")):
         return ("model:read", "model:manage") if method == "GET" else ("model:manage",)
-    if path == "/api/chat" or path.endswith("/questions"):
+    if path == "/api/chat" or path.startswith("/api/chat/") or path.endswith("/questions"):
         return ("chat:use",)
     if path == "/api/meetings" and method == "POST":
         return ("meeting:create",)

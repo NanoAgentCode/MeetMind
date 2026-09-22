@@ -36,10 +36,26 @@ export async function askMeeting(id: string, question: string) {
   return (await api.post<{ answer: string }>(`/meetings/${id}/questions`, { question })).data.answer
 }
 
-export async function chat(question: string, history: ChatMessage[], meetingId?: string) {
-  return (await api.post<{ answer: string }>('/chat', {
-    question, history, meeting_id: meetingId || null,
-  })).data.answer
+export interface ChatConversation {
+  id: string
+  meeting_id: string | null
+  title: string
+  messages: ChatMessage[]
+  updated_at: string
+}
+
+export async function listChatConversations() {
+  return (await api.get<ChatConversation[]>('/chat/conversations')).data
+}
+
+export async function getChatConversation(id: string) {
+  return (await api.get<ChatConversation>(`/chat/conversations/${id}`)).data
+}
+
+export async function chat(question: string, history: ChatMessage[], meetingId?: string, conversationId?: string) {
+  return (await api.post<{ answer: string; conversation_id: string }>('/chat', {
+    question, history, meeting_id: meetingId || null, conversation_id: conversationId || null,
+  })).data
 }
 
 export function exportUrl(id: string, format: 'docx' | 'md') {

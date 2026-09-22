@@ -25,7 +25,8 @@ vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query: string) => ({
 })))
 
 vi.mock('./api', () => ({
-  askMeeting: vi.fn(), chat: vi.fn().mockResolvedValue('测试回答'), createModelConfig: vi.fn(), createModelProvider: vi.fn(), deleteMeeting: vi.fn(),
+  askMeeting: vi.fn(), chat: vi.fn().mockResolvedValue({ answer: '测试回答', conversation_id: 'chat-1' }),
+  listChatConversations: vi.fn().mockResolvedValue([]), getChatConversation: vi.fn(), createModelConfig: vi.fn(), createModelProvider: vi.fn(), deleteMeeting: vi.fn(),
   deleteModelConfig: vi.fn(), deleteModelProvider: vi.fn(), exportUrl: vi.fn(), generateMinutes: vi.fn(),
   listMeetings: vi.fn().mockResolvedValue([{ id: 'meeting-1', filename: 'weekly.mp3', title: '产品周会', created_at: '2026-09-21T00:00:00Z', status: 'transcribed', transcript: '周五发布', minutes: null }]), listModelConfigs: vi.fn().mockResolvedValue([]), listProviderModels: vi.fn().mockResolvedValue(['gpt-4o-mini', 'qwen3']),
   listModelProviders: vi.fn().mockResolvedValue([{ id: 'provider-1', name: '企业模型', protocol: 'openai_compatible', base_url: 'https://llm.example.com/v1', enabled: true, api_key_configured: true, api_key_masked: 'sk-••••test', created_at: '2026-09-21T00:00:00Z' }]), saveMinutes: vi.fn(), transcribeMeeting: vi.fn(),
