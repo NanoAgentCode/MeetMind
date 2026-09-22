@@ -16,6 +16,7 @@ class AppSettings(BaseSettings):
     admin_username: str = Field(default="", validation_alias="ADMIN_USERNAME")
     admin_password: str = Field(default="", validation_alias="ADMIN_PASSWORD")
     cookie_secure: bool = Field(default=False, validation_alias="COOKIE_SECURE")
+    chat_context_window_tokens: int = Field(default=262144, ge=512, validation_alias="CHAT_CONTEXT_WINDOW_TOKENS")
 
 
 class ASRSettings(BaseSettings):

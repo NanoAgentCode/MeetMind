@@ -13,13 +13,15 @@ from fastapi.responses import Response
 from .access import has_permission, required_route_permissions
 from .access_routes import create_access_router
 from .auth import auth_store
+from .chat_context import plan_compaction, prompt_tokens
 from .chat_store import ChatStore
 from .config import settings
 from .exporter import docx_bytes, markdown
 from .model_registry import model_registry
 from .model_routes import create_model_router
 from .models import ChatRequest, ChatResponse, ChatTurn, Meeting, MeetingAnswer, MeetingQuestion, Minutes
-from .services import answer_chat, answer_meeting_question, create_minutes, transcribe_audio
+from .provider_context import resolve_context_window
+from .services import answer_chat, answer_meeting_question, chat_instruction, create_minutes, summarize_chat_history, transcribe_audio
 from .store import store
 
 _running_transcriptions: set[str] = set()
@@ -228,12 +230,29 @@ async def chat(data: ChatRequest, request: Request):
         raise HTTPException(404, "对话不存在")
     meeting_id = conversation["meeting_id"] if conversation else data.meeting_id
     meeting = require_meeting(meeting_id, request.state.user) if meeting_id else None
-    history = [ChatTurn(**turn) for turn in conversation["messages"][-20:]] if conversation else data.history
+    all_messages = conversation["messages"] if conversation else [turn.model_dump() for turn in data.history]
+    summarized_count = conversation["summarized_count"] if conversation else 0
+    summary = conversation["summary_text"] if conversation else ""
+    history = [ChatTurn(**turn) for turn in all_messages[summarized_count:]]
     try:
-        answer = await answer_chat(data.question, history, meeting, model_registry)
-        messages = (conversation["messages"] if conversation else [turn.model_dump() for turn in history]) + [
+        instruction = chat_instruction(meeting)
+        context_window = await resolve_context_window(model_registry, meeting, settings.app.chat_context_window_tokens)
+        while (count := plan_compaction(instruction, data.question, history, summary, context_window)):
+            while count > 1 and prompt_tokens("请摘要以下对话", "", history[:count], summary) >= int(context_window * 0.8):
+                count -= 1
+            if prompt_tokens("请摘要以下对话", "", history[:count], summary) >= int(context_window * 0.8):
+                raise HTTPException(413, "单条对话过长，无法在模型上下文窗口内摘要")
+            summary = await summarize_chat_history(summary, history[:count], meeting, model_registry, context_window)
+            summarized_count += count
+            history = history[count:]
+        if prompt_tokens(instruction, data.question, history, summary) >= int(context_window * 0.8):
+            raise HTTPException(413, "问题或会议内容超过模型上下文窗口的 80%，请缩短输入")
+        answer = (await answer_chat(data.question, history, meeting, model_registry, summary=summary)
+                  if summary else await answer_chat(data.question, history, meeting, model_registry))
+        messages = all_messages + [
             {"role": "user", "content": data.question}, {"role": "assistant", "content": answer}]
-        conversation_id = chats.save(owner_id, meeting_id, data.question, messages, data.conversation_id)
+        conversation_id = chats.save(owner_id, meeting_id, data.question, messages, data.conversation_id,
+                                     summary, summarized_count)
         return ChatResponse(answer=answer, meeting_id=meeting_id, conversation_id=conversation_id)
     except (ValueError, httpx.HTTPError) as exc:
         raise HTTPException(502, f"对话失败：{exc}") from exc

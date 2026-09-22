@@ -175,6 +175,60 @@ def test_chat_history_is_private_and_continues_with_saved_context(monkeypatch, t
     assert client.post("/api/chat", json={"question": "第三问", "conversation_id": conversation_id}).status_code == 404
 
 
+def test_chat_compacts_at_eighty_percent_and_preserves_full_history(monkeypatch, tmp_path):
+    monkeypatch.setattr(main_module, "store", MeetingStore(MemoryObjectStorage(), tmp_path / "compact.db"))
+    monkeypatch.setattr(main_module.settings.app, "chat_context_window_tokens", 512)
+    summaries = []
+    seen = []
+
+    async def fake_summary(previous, turns, _meeting, _registry, _window):
+        summaries.append((previous, len(turns)))
+        return "之前关于发布的讨论摘要"
+
+    async def fake_answer(question, history, _meeting, _registry, summary=""):
+        seen.append((question, len(history), summary))
+        return "回答"
+
+    async def fake_window(_registry, _meeting, fallback):
+        return fallback
+
+    monkeypatch.setattr(main_module, "summarize_chat_history", fake_summary)
+    monkeypatch.setattr(main_module, "answer_chat", fake_answer)
+    monkeypatch.setattr(main_module, "resolve_context_window", fake_window)
+    history = [{"role": "user" if index % 2 == 0 else "assistant", "content": "甲" * 100}
+               for index in range(4)]
+    client = TestClient(app)
+    first = client.post("/api/chat", json={"question": "现在呢", "history": history})
+    assert first.status_code == 200
+    conversation_id = first.json()["conversation_id"]
+    saved = client.get(f"/api/chat/conversations/{conversation_id}").json()
+    assert len(saved["messages"]) == 6
+    assert saved["summary_text"] == "之前关于发布的讨论摘要"
+    assert saved["summarized_count"] == 2
+    assert summaries == [("", 2)]
+    assert seen[0] == ("现在呢", 2, "之前关于发布的讨论摘要")
+    second = client.post("/api/chat", json={"question": "继续", "conversation_id": conversation_id})
+    assert second.status_code == 200
+    assert seen[1][2] == "之前关于发布的讨论摘要"
+
+
+def test_existing_chat_database_adds_compaction_columns(tmp_path):
+    import sqlite3
+    from backend.app.chat_store import ChatStore
+
+    path = tmp_path / "old-chat.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute("""CREATE TABLE chat_conversations (
+            id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, meeting_id TEXT,
+            title TEXT NOT NULL, messages_json TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+        connection.execute("INSERT INTO chat_conversations VALUES (?, ?, ?, ?, ?, ?)",
+                           ("old", "user", None, "旧问题", '[{"role":"user","content":"旧问题"}]',
+                            "2026-09-22T00:00:00+00:00"))
+    chat_store = ChatStore(path)
+    assert chat_store.get("old", "user")["summary_text"] == ""
+    assert chat_store.get("old", "user")["summarized_count"] == 0
+
+
 @pytest.mark.parametrize(
     "protocol,base_url,payload,expected_url,expected_models",
     [
