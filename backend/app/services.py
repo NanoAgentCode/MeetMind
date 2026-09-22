@@ -6,10 +6,9 @@ from typing import TypedDict
 import httpx
 from langgraph.graph import END, START, StateGraph
 
-from .config import settings
 from .model_registry import ModelRegistry, model_registry
 from .models import Minutes
-from .providers import build_chat_model, build_managed_chat_model
+from .providers import build_managed_chat_model
 from .chat_service import answer_chat, answer_meeting_question
 
 
@@ -37,30 +36,13 @@ async def transcribe_audio(path: Path, registry: ModelRegistry | None = None) ->
                 )
         response.raise_for_status()
         return response.json()["text"].strip()
-    if settings.asr.backend == "demo":
-        return (
-            "主持人：本次会议主要讨论产品第一阶段上线计划。\n"
-            "张明：上传录音和语音转写功能已经进入联调，本周五前完成异常场景测试。\n"
-            "李华：会议纪要需要支持人工修改，并导出 Word 文档。\n"
-            "主持人：决定第一阶段先交付上传、转写、生成、修改和导出闭环。\n"
-            "王芳：我负责整理验收清单，下周一组织演示。"
-        )
-    if settings.asr.backend != "openai":
-        raise ValueError(f"不支持的 ASR_BACKEND：{settings.asr.backend}")
-    if not settings.openai.api_key:
-        raise ValueError("使用 openai 转写前请配置 OPENAI_API_KEY")
-
-    headers = {"Authorization": f"Bearer {settings.openai.api_key}"}
-    async with httpx.AsyncClient(timeout=180) as client:
-        with path.open("rb") as stream:
-            response = await client.post(
-                f"{settings.openai.base_url.rstrip('/')}/audio/transcriptions",
-                headers=headers,
-                data={"model": settings.asr.model, "response_format": "json"},
-                files={"file": (path.name, stream, "application/octet-stream")},
-            )
-    response.raise_for_status()
-    return response.json()["text"].strip()
+    return (
+        "主持人：本次会议主要讨论产品第一阶段上线计划。\n"
+        "张明：上传录音和语音转写功能已经进入联调，本周五前完成异常场景测试。\n"
+        "李华：会议纪要需要支持人工修改，并导出 Word 文档。\n"
+        "主持人：决定第一阶段先交付上传、转写、生成、修改和导出闭环。\n"
+        "王芳：我负责整理验收清单，下周一组织演示。"
+    )
 
 
 def _sentences(text: str) -> list[str]:
@@ -83,7 +65,7 @@ def _fallback_minutes(title: str, transcript: str) -> Minutes:
 
 async def generate_node(state: WorkflowState) -> WorkflowState:
     managed = model_registry.get_default_model("llm")
-    model = build_managed_chat_model(*managed) if managed else build_chat_model()
+    model = build_managed_chat_model(*managed) if managed else None
     if model is None:
         result = _fallback_minutes(state["title"], state["transcript"])
     else:

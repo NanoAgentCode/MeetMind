@@ -27,9 +27,9 @@ def test_answer_prompt_contains_summary_and_only_selected_recent_turns(monkeypat
 
     class Registry:
         def get_default_model(self, _type):
-            return None
+            return (object(), object(), "")
 
-    monkeypatch.setattr(chat_service, "build_chat_model", lambda: Model())
+    monkeypatch.setattr(chat_service, "build_managed_chat_model", lambda *_args: Model())
     result = asyncio.run(chat_service.answer_chat("新问题", [ChatTurn(role="assistant", content="最近答复")],
                                              registry=Registry(), summary="早期结论"))
     assert result == "完成"

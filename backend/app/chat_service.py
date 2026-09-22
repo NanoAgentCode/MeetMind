@@ -3,7 +3,7 @@
 from .chat_context import truncate_to_tokens
 from .model_registry import ModelRegistry, model_registry
 from .models import ChatTurn, Meeting
-from .providers import build_chat_model, build_managed_chat_model
+from .providers import build_managed_chat_model
 
 
 async def answer_meeting_question(
@@ -23,7 +23,7 @@ async def answer_chat(
         registry.get_default_model("rag") or registry.get_default_model("llm")
         if meeting else registry.get_default_model("llm")
     )
-    model = build_managed_chat_model(*managed) if managed else build_chat_model()
+    model = build_managed_chat_model(*managed) if managed else None
     if model is None:
         mode = "会议 RAG 或 LLM" if meeting else "LLM"
         return f"当前使用演示模型，请先在模型服务中配置并启用默认的{mode}模型。"
@@ -62,7 +62,7 @@ async def summarize_chat_history(previous_summary: str, turns: list[ChatTurn],
                                  meeting: Meeting | None, registry: ModelRegistry,
                                  context_window_tokens: int) -> str:
     managed = (registry.get_default_model("rag") or registry.get_default_model("llm")) if meeting else registry.get_default_model("llm")
-    model = build_managed_chat_model(*managed) if managed else build_chat_model()
+    model = build_managed_chat_model(*managed) if managed else None
     transcript = "\n".join(f"{'用户' if turn.role == 'user' else '助手'}：{turn.content}" for turn in turns)
     if model is None:
         return truncate_to_tokens(f"{previous_summary}\n{transcript}".strip(), context_window_tokens // 4)

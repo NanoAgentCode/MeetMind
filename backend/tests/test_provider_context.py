@@ -24,13 +24,25 @@ def test_default_fallback_context_window_is_256k():
     assert AppSettings.model_fields["chat_context_window_tokens"].default == 262144
 
 
-def test_ollama_context_discovery_uses_show_metadata(monkeypatch):
-    from backend.app.provider_context import _cache
-    from backend.app.config import settings
+def test_no_managed_model_uses_fallback_even_with_legacy_ollama_env(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
     class Registry:
         def get_default_model(self, _type):
             return None
+
+    assert asyncio.run(resolve_context_window(Registry(), None, 262144)) == 262144
+
+
+def test_ollama_context_discovery_uses_show_metadata():
+    from backend.app.provider_context import _cache
+    from types import SimpleNamespace
+
+    class Registry:
+        def get_default_model(self, _type):
+            return (SimpleNamespace(model_id="test-model"),
+                    SimpleNamespace(protocol="ollama", base_url="http://localhost:11434"), "")
 
     class Response:
         def raise_for_status(self):
@@ -53,7 +65,5 @@ def test_ollama_context_discovery_uses_show_metadata(monkeypatch):
             assert json == {"model": "test-model"}
             return Response()
 
-    monkeypatch.setattr(settings.llm, "provider", "ollama")
-    monkeypatch.setattr(settings.llm, "model", "test-model")
     _cache.clear()
     assert asyncio.run(resolve_context_window(Registry(), None, 8192, Client)) == 2048

@@ -1,73 +1,30 @@
+from datetime import datetime, timezone
+
 import pytest
 
-from backend.app.config import (
-    ASRSettings,
-    AnthropicSettings,
-    AppSettings,
-    LLMSettings,
-    OllamaSettings,
-    OpenAISettings,
-    RustFSSettings,
-    Settings,
-    VLLMSettings,
-)
-from backend.app.providers import build_chat_model
+from backend.app.models import ModelConfig, Provider
+from backend.app.providers import build_managed_chat_model
 
 
-def config(**overrides):
-    return Settings(
-        app=AppSettings(_env_file=None),
-        asr=ASRSettings(_env_file=None),
-        llm=LLMSettings(
-            provider=overrides.get("llm_provider", "demo"),
-            model=overrides.get("llm_model", "test-model"),
-            _env_file=None,
-        ),
-        openai=OpenAISettings(api_key=overrides.get("openai_api_key", ""), _env_file=None),
-        anthropic=AnthropicSettings(api_key=overrides.get("anthropic_api_key", ""), _env_file=None),
-        ollama=OllamaSettings(_env_file=None),
-        vllm=VLLMSettings(
-            base_url=overrides.get("vllm_base_url", "http://localhost:8000/v1"),
-            _env_file=None,
-        ),
-        rustfs=RustFSSettings(_env_file=None),
-    )
+def managed(protocol: str, api_key: str = "test-key"):
+    now = datetime.now(timezone.utc)
+    model = ModelConfig(id="model", provider_id="provider", name="测试模型", model_id="test-model",
+                        model_type="llm", enabled=True, is_default=True, created_at=now)
+    provider = Provider(id="provider", name="测试供应商", protocol=protocol,
+                        base_url="http://localhost:8000/v1", enabled=True, created_at=now)
+    return model, provider, api_key
 
 
-def test_demo_provider_uses_deterministic_fallback():
-    assert build_chat_model(config()) is None
+@pytest.mark.parametrize("protocol,client_name", [
+    ("openai", "ChatOpenAI"), ("openai_compatible", "ChatOpenAI"),
+    ("anthropic", "ChatAnthropic"), ("ollama", "ChatOllama"),
+])
+def test_managed_model_uses_saved_provider(protocol, client_name):
+    client = build_managed_chat_model(*managed(protocol))
+    assert client.__class__.__name__ == client_name
 
 
-def test_openai_provider():
-    model = build_chat_model(config(llm_provider="openai", openai_api_key="test-key"))
-    assert model.__class__.__name__ == "ChatOpenAI"
-    assert model.model_name == "test-model"
-
-
-def test_anthropic_provider():
-    model = build_chat_model(config(llm_provider="anthropic", anthropic_api_key="test-key"))
-    assert model.__class__.__name__ == "ChatAnthropic"
-    assert model.model == "test-model"
-
-
-def test_ollama_provider():
-    model = build_chat_model(config(llm_provider="ollama"))
-    assert model.__class__.__name__ == "ChatOllama"
-    assert model.model == "test-model"
-
-
-def test_vllm_uses_openai_compatible_client():
-    model = build_chat_model(config(llm_provider="vllm", vllm_base_url="http://vllm:8000/v1"))
-    assert model.__class__.__name__ == "ChatOpenAI"
-    assert str(model.openai_api_base).rstrip("/") == "http://vllm:8000/v1"
-
-
-@pytest.mark.parametrize("provider,key_name", [("openai", "OPENAI_API_KEY"), ("anthropic", "ANTHROPIC_API_KEY")])
-def test_cloud_provider_requires_key(provider, key_name):
-    with pytest.raises(ValueError, match=key_name):
-        build_chat_model(config(llm_provider=provider))
-
-
-def test_rejects_unknown_provider():
-    with pytest.raises(ValueError, match="不支持的 LLM_PROVIDER"):
-        build_chat_model(config(llm_provider="unknown"))
+@pytest.mark.parametrize("protocol", ["openai", "anthropic"])
+def test_managed_cloud_provider_requires_key(protocol):
+    with pytest.raises(ValueError, match="API Key"):
+        build_managed_chat_model(*managed(protocol, ""))

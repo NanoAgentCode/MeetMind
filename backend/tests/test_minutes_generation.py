@@ -5,7 +5,7 @@ from backend.app import services
 
 class EmptyModelRegistry:
     def get_default_model(self, _model_type):
-        return None
+        return (object(), object(), "")
 
 
 class Response:
@@ -28,7 +28,7 @@ class FakeModel:
 
 def test_generation_normalizes_provider_json(monkeypatch):
     monkeypatch.setattr(services, "model_registry", EmptyModelRegistry())
-    monkeypatch.setattr(services, "build_chat_model", lambda: FakeModel())
+    monkeypatch.setattr(services, "build_managed_chat_model", lambda *_args: FakeModel())
     result = asyncio.run(
         services.generate_node({"title": "项目周会", "transcript": "会议确认第一阶段范围。"})
     )
@@ -42,7 +42,7 @@ def test_generation_rejects_non_json_response(monkeypatch):
         async def ainvoke(self, prompt):
             return type("Response", (), {"content": "这不是 JSON"})()
 
-    monkeypatch.setattr(services, "build_chat_model", lambda: InvalidModel())
+    monkeypatch.setattr(services, "build_managed_chat_model", lambda *_args: InvalidModel())
     try:
         asyncio.run(services.generate_node({"title": "项目周会", "transcript": "内容"}))
     except ValueError:

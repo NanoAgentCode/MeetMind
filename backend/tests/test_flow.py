@@ -4,7 +4,6 @@ from docx import Document
 from fastapi.testclient import TestClient
 import pytest
 
-from backend.app.config import settings
 from backend.app.auth import PERMISSIONS
 from backend.app.main import app
 from backend.app.store import MeetingStore
@@ -46,7 +45,6 @@ def test_complete_meeting_flow(monkeypatch, tmp_path):
     test_store = MeetingStore(object_storage, tmp_path / "meetings.db")
     monkeypatch.setattr(main_module, "store", test_store)
     monkeypatch.setattr(services_module, "model_registry", EmptyModelRegistry())
-    monkeypatch.setattr(settings.asr, "backend", "demo")
     client = TestClient(app)
 
     uploaded = client.post(

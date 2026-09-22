@@ -140,9 +140,6 @@ def schedule_transcription(meeting_id: str):
 def health():
     return {
         "status": "ok",
-        "asr_backend": settings.asr.backend,
-        "llm_provider": settings.llm.provider,
-        "llm_model": settings.llm.model,
     }
 
 

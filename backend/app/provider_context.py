@@ -6,7 +6,6 @@ from urllib.parse import quote
 
 import httpx
 
-from .config import settings
 from .model_registry import ModelRegistry
 from .models import Meeting
 
@@ -42,8 +41,6 @@ async def resolve_context_window(registry: ModelRegistry, meeting: Meeting | Non
     if managed:
         model, provider, api_key = managed
         protocol, base_url, model_id = provider.protocol, provider.base_url.rstrip("/"), model.model_id
-    elif settings.llm.provider == "ollama":
-        protocol, base_url, model_id, api_key = "ollama", settings.ollama.base_url.rstrip("/"), settings.llm.model, ""
     else:
         return fallback
     if protocol not in {"ollama", "openai_compatible"}:

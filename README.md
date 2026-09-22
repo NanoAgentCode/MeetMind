@@ -69,49 +69,7 @@ uv sync
 
 IDE 的 Python 解释器应指向当前项目的 `.venv\Scripts\python.exe`，不要继续使用旧目录中的虚拟环境。
 
-默认 `ASR_BACKEND=demo`，可无需密钥走通全部功能，但转写内容是用于产品演示的固定示例。
-
-要转写真实录音，请修改 `backend/.env`：
-
-```dotenv
-ASR_BACKEND=openai
-OPENAI_API_KEY=你的密钥
-OPENAI_BASE_URL=https://api.openai.com/v1
-ASR_MODEL=whisper-1
-```
-
-`OPENAI_BASE_URL` 可替换为实现兼容接口的语音转写服务地址。
-
-### 选择纪要模型协议
-
-默认 `LLM_PROVIDER=demo`，LangGraph 运行无需模型服务的确定性提取流程。接入模型时选择下面一种配置：
-
-```dotenv
-# OpenAI
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o-mini
-OPENAI_API_KEY=你的密钥
-OPENAI_BASE_URL=https://api.openai.com/v1
-
-# Claude（Anthropic 原生协议）
-LLM_PROVIDER=anthropic
-LLM_MODEL=claude-sonnet-4-5
-ANTHROPIC_API_KEY=你的密钥
-ANTHROPIC_BASE_URL=https://api.anthropic.com
-
-# Ollama
-LLM_PROVIDER=ollama
-LLM_MODEL=qwen3:8b
-OLLAMA_BASE_URL=http://localhost:11434
-
-# vLLM（OpenAI-compatible 协议）
-LLM_PROVIDER=vllm
-LLM_MODEL=Qwen/Qwen3-8B
-VLLM_BASE_URL=http://localhost:8000/v1
-VLLM_API_KEY=EMPTY
-```
-
-模型名称仅为配置示例，请替换为服务中实际可用的模型。四种协议统一输出并校验 `title`、`summary`、`key_points`、`decisions` 和 `action_items` 字段。
+ASR、LLM 和 RAG 的供应商、模型及 API Key 均在前端「模型服务」中配置，并为对应类型设置默认模型。未配置默认 ASR 模型时，转写返回固定演示内容；未配置默认 LLM 模型时，纪要使用本地确定性提取。旧的 `ASR_*`、`LLM_*`、`OPENAI_*`、`ANTHROPIC_*`、`OLLAMA_*`、`VLLM_*` 环境变量不再读取。纪要输出统一校验 `title`、`summary`、`key_points`、`decisions` 和 `action_items` 字段。
 
 ### 3. 前端
 
@@ -137,5 +95,4 @@ npm run build
 
 - 会议元数据、转写和纪要存储在 SQLite；录音与导出文件存储在 RustFS 的 `huizhi-meetings` 桶中。
 - 当前为会后上传处理，不采集实时麦克风音频。
-- 使用 `demo` 后端不会识别真实音频；正式演示前需配置真实 ASR 服务。
-- `LLM_PROVIDER` 控制纪要模型；`ASR_BACKEND` 独立控制语音转写，两者不要混用。
+- 未配置默认 ASR 模型时不会识别真实音频；正式使用前需在「模型服务」中配置 ASR 模型。
