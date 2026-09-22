@@ -1,7 +1,7 @@
 import { AudioOutlined, CheckCircleFilled, EditOutlined, FileTextOutlined, LoadingOutlined, PlusOutlined, RobotOutlined, SafetyCertificateOutlined, UploadOutlined } from '@ant-design/icons'
 import { Button, Empty, Input, Tag, Upload } from 'antd'
 import type { UploadFile } from 'antd'
-import type { Meeting, Minutes } from './types'
+import type { Meeting, Minutes } from '../../shared/types'
 import { formatDate } from './RecordsPage'
 
 const { TextArea } = Input

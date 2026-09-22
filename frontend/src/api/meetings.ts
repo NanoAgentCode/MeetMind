@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { ChatMessage, Meeting, Minutes } from '../types'
+import type { ChatMessage, Meeting, Minutes } from '../shared/types'
 
 export async function uploadRecording(file: File, title: string) {
   const body = new FormData()

@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Modal } from 'antd'
 import App from './App'
-import { createDepartment, getCurrentUser, listNotifications, login, logout } from './api'
+import { createDepartment, getCurrentUser, listNotifications, login, logout } from '../api'
 
 class ResizeObserverMock {
   observe() {}
@@ -24,7 +24,7 @@ vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query: string) => ({
   dispatchEvent: vi.fn(),
 })))
 
-vi.mock('./api', () => ({
+vi.mock('../api', () => ({
   askMeeting: vi.fn(), chat: vi.fn().mockResolvedValue({ answer: '测试回答', conversation_id: 'chat-1' }),
   listChatConversations: vi.fn().mockResolvedValue([]), getChatConversation: vi.fn(), createModelConfig: vi.fn(), createModelProvider: vi.fn(), deleteMeeting: vi.fn(),
   deleteModelConfig: vi.fn(), deleteModelProvider: vi.fn(), exportUrl: vi.fn(), generateMinutes: vi.fn(),

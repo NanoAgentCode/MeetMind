@@ -4,8 +4,8 @@ import { Button, Checkbox, Empty, Input, InputNumber, Modal, Select, Spin, Switc
 import {
   createDepartment, createRole, createUser, deleteDepartment, deleteRole, deleteUser,
   listDepartments, listPermissions, listRoles, listUsers, updateDepartment, updateRole, updateUser,
-} from './api'
-import type { Department, DepartmentInput, PermissionItem, Role, RoleInput, User, UserCreateInput } from './types'
+} from '../../api'
+import type { Department, DepartmentInput, PermissionItem, Role, RoleInput, User, UserCreateInput } from '../../shared/types'
 
 type Editor = { kind: 'user'; item?: User } | { kind: 'role'; item?: Role } | { kind: 'department'; item?: Department }
 type UserDraft = UserCreateInput & { is_active: boolean }

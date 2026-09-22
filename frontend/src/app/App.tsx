@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Input, Modal, Spin, message } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { Modal, Spin, message } from 'antd'
 import type { UploadFile } from 'antd'
-import { deleteMeeting, generateMinutes, getCurrentUser, getMeeting, listMeetings, listNotifications, login, logout, markNotificationRead, saveMinutes, transcribeMeeting, uploadRecording } from './api'
-import type { AppNotification, Meeting, Minutes, User } from './types'
-import MeetingChat from './MeetingChat'
-import ModelManagement from './ModelManagement'
-import AccessManagement from './AccessManagement'
-import RecordsPage from './RecordsPage'
-import WorkspacePage from './WorkspacePage'
+import { deleteMeeting, generateMinutes, getCurrentUser, getMeeting, listMeetings, saveMinutes, transcribeMeeting, uploadRecording } from '../api'
+import type { AppNotification, Meeting, Minutes } from '../shared/types'
+import MeetingChat from '../features/chat/MeetingChat'
+import ModelManagement from '../features/models/ModelManagement'
+import AccessManagement from '../features/access/AccessManagement'
+import RecordsPage from '../features/meetings/RecordsPage'
+import WorkspacePage from '../features/meetings/WorkspacePage'
 import AppChrome from './AppChrome'
 import type { Page } from './AppChrome'
+import LoginPage from '../features/auth/LoginPage'
+import { useSession } from '../features/auth/useSession'
+import { useNotifications } from '../features/notifications/useNotifications'
 
 
 function lines(value: string) {
@@ -17,13 +20,8 @@ function lines(value: string) {
 }
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null)
-  const [authLoading, setAuthLoading] = useState(true)
-  const [loginBusy, setLoginBusy] = useState(false)
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [notifications, setNotifications] = useState<AppNotification[]>([])
-  const seenNotificationIds = useRef<Set<string> | null>(null)
+  const { user, setUser, loading: authLoading, loginBusy, signIn, signOut } = useSession()
+  const { notifications, markRead } = useNotifications(user)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [page, setPage] = useState<Page>('workspace')
   const [fileList, setFileList] = useState<UploadFile[]>([])
@@ -57,43 +55,14 @@ export default function App() {
   }), [query, records, statusFilter])
 
   useEffect(() => {
-    void getCurrentUser().then(setUser).catch(() => setUser(null)).finally(() => setAuthLoading(false))
-  }, [])
-
-  useEffect(() => {
     const resetSession = () => {
-      setUser(null)
       setMeeting(null)
       setRecords([])
       setRecordsLoaded(false)
-      setNotifications([])
-      seenNotificationIds.current = null
     }
     window.addEventListener('meetmind:unauthorized', resetSession)
     return () => window.removeEventListener('meetmind:unauthorized', resetSession)
   }, [])
-
-  useEffect(() => {
-    if (!user) return
-    let active = true
-    async function refresh() {
-      try {
-        const latest = await listNotifications()
-        if (!active) return
-        const previous = seenNotificationIds.current
-        if (previous && 'Notification' in window && Notification.permission === 'granted') {
-          latest.filter((item) => !item.read_at && !previous.has(item.id)).forEach((item) => {
-            new Notification(item.title, { body: item.body })
-          })
-        }
-        seenNotificationIds.current = new Set(latest.map((item) => item.id))
-        setNotifications(latest)
-      } catch { /* Notification polling should not interrupt the workspace. */ }
-    }
-    void refresh()
-    const timer = window.setInterval(refresh, 10_000)
-    return () => { active = false; window.clearInterval(timer) }
-  }, [user])
 
   useEffect(() => {
     if (!user || !meeting || !['queued', 'transcribing'].includes(meeting.status)) return
@@ -107,28 +76,11 @@ export default function App() {
     return () => window.clearInterval(timer)
   }, [user, meeting])
 
-  async function handleLogin() {
-    setLoginBusy(true)
-    try {
-      setUser(await login(username.trim(), password))
-      setPassword('')
-      message.success('登录成功')
-    } catch (error) {
-      const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
-      message.error(detail || '登录失败')
-    } finally {
-      setLoginBusy(false)
-    }
-  }
-
   async function handleLogout() {
-    await logout()
-    setUser(null)
+    await signOut()
     setMeeting(null)
     setRecords([])
     setRecordsLoaded(false)
-    setNotifications([])
-    seenNotificationIds.current = null
   }
 
   function confirmLogout() {
@@ -142,8 +94,7 @@ export default function App() {
   }
 
   async function openNotification(item: AppNotification) {
-    await markNotificationRead(item.id)
-    setNotifications((current) => current.map((entry) => entry.id === item.id ? { ...entry, read_at: new Date().toISOString() } : entry))
+    await markRead(item)
     if (item.meeting_id) {
       try { openWorkspace(await getMeeting(item.meeting_id)) } catch { message.error('会议已不存在') }
     }
@@ -239,7 +190,7 @@ export default function App() {
   }
 
   if (authLoading) return <div className="auth-loading"><Spin size="large" /></div>
-  if (!user) return <div className="login-page"><div className="login-brand"><span className="brand-symbol">会</span><strong>会智录</strong><small>MEETMIND</small></div><section className="login-card"><p className="login-eyebrow">企业会议工作空间</p><h1>欢迎回来</h1><p>登录后继续处理录音、纪要与会议问答</p><form onSubmit={(event) => { event.preventDefault(); void handleLogin() }}><label htmlFor="login-username">账号</label><Input id="login-username" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="请输入账号" /><label htmlFor="login-password">密码</label><Input.Password id="login-password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入密码" /><Button type="primary" htmlType="submit" loading={loginBusy} disabled={!username.trim() || !password}>登录工作台</Button></form></section><span className="login-footnote">安全协作 · 会议内容仅对账号所属用户可见</span></div>
+  if (!user) return <LoginPage busy={loginBusy} onLogin={signIn} />
 
   return (
     <AppChrome user={user} page={page} meeting={meeting} notifications={notifications}

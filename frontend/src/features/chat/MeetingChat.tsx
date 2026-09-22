@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AudioOutlined, CloseOutlined, MessageOutlined, PlusOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons'
 import { Button, Empty, Input, Spin, Tag, message } from 'antd'
-import { chat, getChatConversation, listChatConversations, listMeetings } from './api'
-import type { ChatConversation } from './api'
-import type { ChatMessage, Meeting } from './types'
+import { chat, getChatConversation, listChatConversations, listMeetings } from '../../api'
+import type { ChatConversation } from '../../api'
+import type { ChatMessage, Meeting } from '../../shared/types'
 
 export default function MeetingChat({ initialMeeting = null, canBrowseMeetings = true }: { initialMeeting?: Meeting | null; canBrowseMeetings?: boolean }) {
   const [meetings, setMeetings] = useState<Meeting[]>([])

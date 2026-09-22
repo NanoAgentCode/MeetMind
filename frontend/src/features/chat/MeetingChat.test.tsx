@@ -3,12 +3,12 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import MeetingChat from './MeetingChat'
-import { chat } from './api'
+import { chat } from '../../api'
 
 vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 vi.stubGlobal('matchMedia', () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} }))
 
-vi.mock('./api', () => ({
+vi.mock('../../api', () => ({
   listMeetings: vi.fn().mockResolvedValue([]),
   listChatConversations: vi.fn().mockResolvedValue([{ id: 'saved-1', meeting_id: null, title: '之前的问题', updated_at: '2026-09-22T00:00:00Z', messages: [] }]),
   getChatConversation: vi.fn().mockResolvedValue({ id: 'saved-1', meeting_id: null, title: '之前的问题', updated_at: '2026-09-22T00:00:00Z', messages: [{ role: 'user', content: '之前的问题' }, { role: 'assistant', content: '之前的回答' }] }),

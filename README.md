@@ -54,9 +54,9 @@ Copy-Item backend\.env.example backend\.env
 uv run python backend\main.py
 ```
 
-`backend/main.py` 是后端启动入口；`backend/app/main.py` 装配 FastAPI 应用、全局鉴权与会议流程，账号权限和模型路由分别在 `backend/app/access_routes.py`、`backend/app/model_routes.py`。需要热更新时可使用 `uv run uvicorn backend.app.main:app --reload`。
+`backend/main.py` 是后端启动入口；`backend/app/main.py` 装配 FastAPI 应用、全局鉴权与会议流程。账号权限、模型和对话路由分别在 `backend/app/access_routes.py`、`backend/app/model_routes.py`、`backend/app/chat_routes.py`；对话提示词与历史摘要在 `backend/app/chat_service.py`。需要热更新时可使用 `uv run uvicorn backend.app.main:app --reload`。
 
-代码按职责组织：后端访问控制请求模型和权限规则在 `backend/app/access.py`，供应商模型目录请求在 `backend/app/provider_catalog.py`；前端请求按认证、权限管理、会议和模型拆在 `frontend/src/api/`，`frontend/src/api.ts` 保留统一导出入口。前端 `App.tsx` 管理状态和导航，`AppChrome.tsx` 负责导航外壳，`RecordsPage.tsx` 与 `WorkspacePage.tsx` 负责业务视图。修改时请保持现有 API 路径与响应结构兼容。
+代码按职责组织：后端访问控制请求模型和权限规则在 `backend/app/access.py`，供应商模型目录请求在 `backend/app/provider_catalog.py`；前端 `src` 根目录仅保留入口和环境声明。应用外壳在 `frontend/src/app/`，认证、通知、对话、会议、模型及权限页面在 `frontend/src/features/`，通用类型和样式在 `frontend/src/shared/`，请求客户端及统一导出入口在 `frontend/src/api/`。修改时请保持现有 API 路径与响应结构兼容。
 
 本地验证可在项目根目录运行 `uv run python -m pytest backend -q`，在 `frontend` 目录运行 `npm run lint`、`npm test` 和 `npm run build`。
 

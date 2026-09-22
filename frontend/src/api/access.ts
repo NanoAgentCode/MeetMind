@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Department, DepartmentInput, PermissionItem, Role, RoleInput, User, UserCreateInput, UserUpdateInput } from '../types'
+import type { Department, DepartmentInput, PermissionItem, Role, RoleInput, User, UserCreateInput, UserUpdateInput } from '../shared/types'
 
 export const listUsers = async () => (await api.get<User[]>('/users')).data
 export const createUser = async (data: UserCreateInput) => (await api.post<User>('/users', data)).data

@@ -4,8 +4,8 @@ import { Button, Empty, Input, Modal, Select, Spin, Switch, Tag, message } from 
 import {
   createModelConfig, createModelProvider, deleteModelConfig, deleteModelProvider,
   listModelConfigs, listModelProviders, listProviderModels, testModelProvider, updateModelConfig, updateModelProvider,
-} from './api'
-import type { ModelConfig, ModelConfigInput, ModelProvider, ModelProviderInput, ModelType, ProviderProtocol } from './types'
+} from '../../api'
+import type { ModelConfig, ModelConfigInput, ModelProvider, ModelProviderInput, ModelType, ProviderProtocol } from '../../shared/types'
 
 const protocolLabels: Record<ProviderProtocol, string> = {
   openai: 'OpenAI', anthropic: 'Anthropic', ollama: 'Ollama', openai_compatible: 'OpenAI Compatible',

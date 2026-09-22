@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { AppNotification, User } from '../types'
+import type { AppNotification, User } from '../shared/types'
 
 export async function login(username: string, password: string) {
   return (await api.post<User>('/auth/login', { username, password })).data

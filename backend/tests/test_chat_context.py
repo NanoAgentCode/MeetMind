@@ -1,6 +1,6 @@
 from backend.app.chat_context import estimate_tokens, plan_compaction
 from backend.app.models import ChatTurn
-from backend.app import services
+from backend.app import chat_service
 import asyncio
 
 
@@ -29,7 +29,7 @@ def test_answer_prompt_contains_summary_and_only_selected_recent_turns(monkeypat
         def get_default_model(self, _type):
             return None
 
-    monkeypatch.setattr(services, "build_chat_model", lambda: Model())
-    result = asyncio.run(services.answer_chat("新问题", [ChatTurn(role="assistant", content="最近答复")],
+    monkeypatch.setattr(chat_service, "build_chat_model", lambda: Model())
+    result = asyncio.run(chat_service.answer_chat("新问题", [ChatTurn(role="assistant", content="最近答复")],
                                              registry=Registry(), summary="早期结论"))
     assert result == "完成"

@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { ModelConfig, ModelConfigInput, ModelProvider, ModelProviderInput } from '../types'
+import type { ModelConfig, ModelConfigInput, ModelProvider, ModelProviderInput } from '../shared/types'
 
 export async function listModelProviders() {
   return (await api.get<ModelProvider[]>('/model-providers')).data

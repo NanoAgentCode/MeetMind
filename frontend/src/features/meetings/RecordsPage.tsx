@@ -1,6 +1,6 @@
 import { AudioOutlined, CheckCircleFilled, DeleteOutlined, FolderOpenOutlined, LoadingOutlined, MessageOutlined, PlusOutlined, RobotOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Empty, Input, Select, Spin, Table, Tag } from 'antd'
-import type { Meeting } from './types'
+import type { Meeting } from '../../shared/types'
 
 export const statusMeta = {
   uploaded: { label: '待转写', color: 'default' },

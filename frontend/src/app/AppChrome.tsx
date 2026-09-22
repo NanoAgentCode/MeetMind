@@ -5,8 +5,8 @@ import {
 } from '@ant-design/icons'
 import { Button, Empty, Popover } from 'antd'
 import type { ReactNode } from 'react'
-import type { AppNotification, Meeting, User } from './types'
-import { formatDate } from './RecordsPage'
+import type { AppNotification, Meeting, User } from '../shared/types'
+import { formatDate } from '../features/meetings/RecordsPage'
 
 export type Page = 'workspace' | 'records' | 'chat' | 'models' | 'access'
 

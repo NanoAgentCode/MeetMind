@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 import backend.app.main as main_module
+import backend.app.chat_routes as chat_routes
 from backend.app.main import app
 from backend.app.auth import PERMISSIONS
 from backend.app.model_registry import ModelRegistry
@@ -137,7 +138,7 @@ def test_unified_chat_supports_regular_and_meeting_modes(monkeypatch, tmp_path, 
         assert passed_registry is registry
         return "周五发布。" if meeting else "这是普通问答。"
 
-    monkeypatch.setattr(main_module, "answer_chat", fake_chat)
+    monkeypatch.setattr(chat_routes, "answer_chat", fake_chat)
     response = TestClient(app).post(
         "/api/chat",
         json={
@@ -158,7 +159,7 @@ def test_chat_history_is_private_and_continues_with_saved_context(monkeypatch, t
         seen.append([turn.content for turn in history])
         return f"回答：{question}"
 
-    monkeypatch.setattr(main_module, "answer_chat", fake_chat)
+    monkeypatch.setattr(chat_routes, "answer_chat", fake_chat)
     client = TestClient(app)
     first = client.post("/api/chat", json={"question": "第一问"})
     assert first.status_code == 200
@@ -192,9 +193,9 @@ def test_chat_compacts_at_eighty_percent_and_preserves_full_history(monkeypatch,
     async def fake_window(_registry, _meeting, fallback):
         return fallback
 
-    monkeypatch.setattr(main_module, "summarize_chat_history", fake_summary)
-    monkeypatch.setattr(main_module, "answer_chat", fake_answer)
-    monkeypatch.setattr(main_module, "resolve_context_window", fake_window)
+    monkeypatch.setattr(chat_routes, "summarize_chat_history", fake_summary)
+    monkeypatch.setattr(chat_routes, "answer_chat", fake_answer)
+    monkeypatch.setattr(chat_routes, "resolve_context_window", fake_window)
     history = [{"role": "user" if index % 2 == 0 else "assistant", "content": "甲" * 100}
                for index in range(4)]
     client = TestClient(app)
