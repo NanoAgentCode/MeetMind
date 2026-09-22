@@ -147,6 +147,7 @@ export default function ModelManagement({ canManage = true }: { canManage?: bool
           return <article key={type}><span className={`model-type-icon ${type}`}>{type === 'asr' ? <ApiOutlined /> : <RobotOutlined />}</span><div><small>{meta.label}</small><strong>{active?.name || '未设置默认模型'}</strong><p>{meta.description}</p></div><i className={active ? 'ready' : ''} /></article>
         })}
       </section>
+      <div className="model-management-grid">
       <section className="management-section">
         <div className="management-head"><div><h2>供应商</h2><p>API Key 仅用于服务端调用，页面不会返回明文</p></div><Tag>{providers.length} 个</Tag></div>
         {providers.length ? <div className="provider-grid">{providers.map((item) => <article className="provider-card" key={item.id}>
@@ -161,11 +162,11 @@ export default function ModelManagement({ canManage = true }: { canManage?: bool
           <span className={`model-type-icon ${item.model_type}`}>{item.model_type === 'asr' ? <ApiOutlined /> : <RobotOutlined />}</span>
           <div className="model-identity"><strong>{item.name}{item.is_default && <Tag color={typeMeta[item.model_type].color}>默认</Tag>}</strong><small>{item.model_id}</small></div>
           <div className="model-provider"><small>供应商</small><strong>{providerNames[item.provider_id] || '未知供应商'}</strong></div>
-          <Tag color={typeMeta[item.model_type].color}>{typeMeta[item.model_type].label}</Tag>
-          <Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '可用' : '停用'}</Tag>
+          <div className="model-status"><Tag color={typeMeta[item.model_type].color}>{typeMeta[item.model_type].label}</Tag><Tag color={item.enabled ? 'success' : 'default'}>{item.enabled ? '可用' : '停用'}</Tag></div>
           {canManage && <div className="card-actions"><Button type="text" icon={<EditOutlined />} onClick={() => void openModel(item)} /><Button danger type="text" icon={<DeleteOutlined />} onClick={() => removeModel(item)} /></div>}
         </article>)}</div> : <Empty description={providers.length ? '还没有模型配置' : '请先添加供应商'} />}
       </section>
+      </div>
     </Spin>
 
     <Modal title={providerEditing ? '编辑供应商' : '添加供应商'} open={!!providerDraft} onCancel={() => setProviderDraft(null)} onOk={saveProvider} confirmLoading={saving} okText="保存" cancelText="取消">
